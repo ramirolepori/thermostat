@@ -17,4 +17,4 @@ cd ../deploy
 pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
 pm2 save
 
-echo "✅ Deploy completo."
+echo "✅ Deploy completo"
