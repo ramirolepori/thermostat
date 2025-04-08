@@ -1,0 +1,5 @@
+Usuario ramirolepori
+Contraseña Gunsnroses14
+HostName thermostat
+
+ssh ramirolepori@thermostat.local
