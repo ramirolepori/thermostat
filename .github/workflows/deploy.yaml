@@ -1,4 +1,4 @@
-name: Deploy Thermostat to Raspberry Pi
+name: Deploy Thermostat on Raspberry Pi
 
 on:
   push:
@@ -7,29 +7,20 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-
+    runs-on: self-hosted
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up SSH key
+      - name: Install dependencies (si hace falta)
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          npm install  # o pnpm install o yarn según uses
 
-      - name: Add Raspberry Pi to known_hosts
-        run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Build app (si aplica)
+        run: |
+          npm run build
 
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd ~/thermostat
-            git pull origin main
-            chmod +x deploy/deploy.sh
-            ./deploy/deploy.sh
+      - name: Run deploy script
+        run: |
+          chmod +x ./deploy/deploy.sh
+          ./deploy/deploy.sh
