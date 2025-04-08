@@ -5,3 +5,5 @@ HostName 192.168.101.48
 IP publica: 186.122.226.43
 
 ssh ramirolepori@thermostat.local
+
+Hola
