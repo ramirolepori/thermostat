@@ -1,27 +1,26 @@
-name: Deploy to Raspberry
+name: Deploy Thermostat to Raspberry Pi
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Setup SSH
-      uses: webfactory/ssh-agent@v0.7.0
-      with:
-        ssh-private-key: ${{ secrets.RASPBERRY_KEY }}
-
-    - name: Deploy to Raspberry Pi
-      run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.RASPBERRY_USER }}@${{ secrets.RASPBERRY_HOST }} << 'EOF'
-          cd ~/thermostat-mvp
-          git pull
-          cd backend && npm install && npm run build
-          pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
-        EOF
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ~/thermostat
+            git pull origin main
+            chmod +x deploy/deploy.sh
+            ./deploy/deploy.sh
