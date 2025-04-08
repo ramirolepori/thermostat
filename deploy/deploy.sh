@@ -1,10 +1,14 @@
 #!/bin/bash
+set -e
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$DIR/.."
 
 echo "🔄 Actualizando repositorio..."
 git pull origin main
 
 echo "🧱 Compilando backend..."
-cd ../backend
+cd backend
 npm install
 npm run build
 
