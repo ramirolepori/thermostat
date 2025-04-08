@@ -1,0 +1,10 @@
+# Mac
+.DS_Store
+
+# Linux
+*~
+
+# Node
+node_modules
+dist
+.env
