@@ -7,30 +7,24 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up SSH key
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Install backend dependencies
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          cd backend/src
+          npm ci
 
-      - name: Add Raspberry Pi to known_hosts
-        run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Build backend
+        run: |
+          cd backend/src
+          npm run build
 
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd ~/actions-runner/_work/thermostat/thermostat/backend/src
-            git pull origin main
-            npm install
-            npm run build
-            pm2 restart thermostat-backend
+      - name: Restart backend with PM2
+        run: pm2 restart thermostat-backend
