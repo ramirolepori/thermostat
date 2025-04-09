@@ -37,6 +37,7 @@ jobs:
       - name: Build frontend
         run: |
           cd frontend
+          npm ci
           npm run build
 
       - name: Deploy frontend to Nginx folder
