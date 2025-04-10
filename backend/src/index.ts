@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { getTemperature } from './sensor';
-import { turnOnRelay, turnOffRelay } from './relay';
+import { turnOnRelay, turnOffRelay, getRelayState } from './relay';
 
 const app = express();
 const PORT = 3001;
@@ -15,10 +15,14 @@ app.get('/api/temperature', (_req, res) => {
   res.json({ temperature: temp });
 });
 
+// Estado caldera
+app.get('/api/status', (_req, res) => {
+  res.json({ status: getRelayState() ? 'on' : 'off' });
+});
+
 // Encender caldera
 app.post('/api/relay/on', (_req, res) => {
   turnOnRelay();
-  console.log('🔥 Caldera encendida');
   // Acá iría el control del GPIO para activar el relé
   res.json({ status: 'on' });
 });
@@ -26,7 +30,6 @@ app.post('/api/relay/on', (_req, res) => {
 // Apagar caldera
 app.post('/api/relay/off', (_req, res) => {
   turnOffRelay();
-  console.log('❄️ Caldera apagada');
   // Acá iría el control del GPIO para desactivar el relé
   res.json({ status: 'off' });
 });
