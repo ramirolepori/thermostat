@@ -24,7 +24,7 @@ app.get('/api/status', (_req, res) => {
 app.post('/api/relay/on', (_req, res) => {
   turnOnRelay();
   // Acá iría el control del GPIO para activar el relé
-  res.json({ status: 'HOLA' });
+  res.json({ status: 'on' });
 });
 
 // Apagar caldera
