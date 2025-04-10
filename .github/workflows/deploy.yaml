@@ -18,30 +18,36 @@ jobs:
 
       - name: Install backend dependencies
         run: |
+          set -e
           cd backend/src
           npm ci
 
       - name: Build backend
         run: |
+          set -e
           cd backend/src
           npm run build
 
       - name: Restart backend with PM2
-        run: pm2 restart thermostat-backend
+        run: |
+          cd backend/src
+          pm2 startOrRestart ecosystem.config.js
 
       - name: Install frontend dependencies
         run: |
+          set -e
           cd frontend
           npm ci
 
       - name: Build frontend
         run: |
+          set -e
           cd frontend
-          npm ci
           npm run build
 
       - name: Deploy frontend to Nginx folder
         run: |
+          set -e
           sudo rm -rf /var/www/thermostat-frontend
           sudo cp -r frontend/dist /var/www/thermostat-frontend
           sudo systemctl restart nginx
