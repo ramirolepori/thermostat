@@ -12,13 +12,24 @@ router.get('/api/temperature', (_req, res) => {
 
 // Estado caldera
 router.get('/api/status', (_req, res) => {
-  res.json({ status: getThermostatState() });
+  // Obtener estado actualizado del termostato
+  const thermostatState = getThermostatState();
+  
+  // Enviar respuesta en el formato que espera el frontend
+  res.json({
+    currentTemperature: thermostatState.currentTemperature,
+    targetTemperature: thermostatState.targetTemperature,
+    hysteresis: thermostatState.hysteresis,
+    isHeating: thermostatState.isHeating,
+    lastUpdated: thermostatState.lastUpdated,
+    isRunning: thermostatState.isRunning
+  });
 });
 
 // Obtener temperatura objetivo
 router.get('/api/target-temperature', (_req, res) => {
   const targetTemperature = getTargetTemperature();
-  res.json({ targetTemperature });
+  res.json({ target: targetTemperature });
 });
 
 // Obtener hysteresis

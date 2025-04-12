@@ -28,8 +28,8 @@ const DEFAULT_CONFIG: ThermostatConfig = {
 // Estado inicial
 let thermostatState: ThermostatState = {
   currentTemperature: 0,
-  targetTemperature: 22,
-  hysteresis: 1.5,
+  targetTemperature: DEFAULT_CONFIG.targetTemperature,
+  hysteresis: DEFAULT_CONFIG.hysteresis,
   isHeating: false,
   lastUpdated: new Date(),
   isRunning: false,
@@ -130,7 +130,18 @@ export function getHysteresis(): number {
  * Obtiene el estado actual del termostato
  */
 export function getThermostatState(): ThermostatState {
-  updateCurrentState(); // Actualizar para tener la información más reciente
+  // Actualizar manualmente los valores antes de devolver el estado
+  const temperature = getTemperature();
+  if (!isNaN(temperature)) {
+    thermostatState.currentTemperature = temperature;
+  }
+  
+  thermostatState.isHeating = getRelayState();
+  thermostatState.targetTemperature = thermostatConfig.targetTemperature;
+  thermostatState.hysteresis = thermostatConfig.hysteresis;
+  thermostatState.lastUpdated = new Date();
+  
+  // Devolver una copia del objeto para evitar modificaciones externas
   return { ...thermostatState };
 }
 

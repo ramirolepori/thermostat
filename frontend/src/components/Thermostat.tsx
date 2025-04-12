@@ -7,8 +7,6 @@ import "../styles/Thermostat.css";
 import {
   getTemperature,
   getRelayState,
-  turnOnRelay,
-  turnOffRelay,
   setTargetTemperature,
   getTargetTemperature,
 } from "../api/thermostatBackend";
