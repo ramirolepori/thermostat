@@ -1,5 +1,5 @@
 
-import type React from "react"
+import React from "react"
 import { useState, useEffect } from "react"
 import { Trash2 } from "lucide-react"
 import "../styles/Thermostat.css"

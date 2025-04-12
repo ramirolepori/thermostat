@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Thermometer, Power, Plus, Minus, Zap, Save } from "lucide-react"
 import "../styles/SmartThermostat.css"
 import SceneSelector from "./SceneSelector"

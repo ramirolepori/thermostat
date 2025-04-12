@@ -1,5 +1,5 @@
 
-import type React from "react"
+import React from "react"
 import { useState, useEffect } from "react"
 import { Thermometer, Power, Plus, Minus, Zap, Save } from "lucide-react"
 import SceneSelector from "./SceneSelector"

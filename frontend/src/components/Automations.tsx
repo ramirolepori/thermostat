@@ -1,6 +1,5 @@
 
-import type React from "react"
-
+import React from "react"
 import { useState } from "react"
 import { Clock, Calendar, Thermometer, Plus, Trash2 } from "lucide-react"
 import "../styles/Automations.css"
