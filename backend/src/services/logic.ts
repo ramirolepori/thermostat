@@ -109,6 +109,21 @@ export function setHysteresis(hysteresis: number): void {
   }
 }
 
+/**
+ * Obtiene el estado actual del termostato
+ */
+export function getThermostatState(): ThermostatState {
+  updateCurrentState(); // Actualizar para tener la información más reciente
+  return { ...thermostatState };
+}
+
+/**
+ * Obtiene la configuración actual del termostato
+ */
+export function getThermostatConfig(): ThermostatConfig {
+  return { ...thermostatConfig };
+}
+
 // Funciones internas
 
 /**
