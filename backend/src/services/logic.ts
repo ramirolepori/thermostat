@@ -28,8 +28,8 @@ const DEFAULT_CONFIG: ThermostatConfig = {
 // Estado inicial
 let thermostatState: ThermostatState = {
   currentTemperature: 0,
-  targetTemperature: DEFAULT_CONFIG.targetTemperature,
-  hysteresis: DEFAULT_CONFIG.hysteresis,
+  targetTemperature: 22,
+  hysteresis: 1.5,
   isHeating: false,
   lastUpdated: new Date(),
   isRunning: false,
