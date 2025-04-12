@@ -4,8 +4,5 @@ export async function getTemperature(): Promise<number> {
     return data.temperature;
   }
   
-  export async function turnRelay(on: boolean): Promise<void> {
-    const endpoint = on ? '/api/relay/on' : '/api/relay/off';
-    await fetch(endpoint, { method: 'POST' });
-  }
+ 
   
