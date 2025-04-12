@@ -44,37 +44,13 @@ export async function getRelayState(): Promise<'on' | 'off' | undefined> {
   }
 }
 
-// Encender la caldera (activar relé)
-export async function turnOnRelay(): Promise<boolean> {
-  try {
-    const res = await fetch('/api/relay/on', { method: 'POST' });
-    if (!res.ok) throw new Error('Error al encender relé');
-    return true;
-  } catch (error) {
-    console.error('turnOnRelay:', error);
-    return false;
-  }
-}
-
-// Apagar la caldera (desactivar relé)
-export async function turnOffRelay(): Promise<boolean> {
-  try {
-    const res = await fetch('/api/relay/off', { method: 'POST' });
-    if (!res.ok) throw new Error('Error al apagar relé');
-    return true;
-  } catch (error) {
-    console.error('turnOffRelay:', error);
-    return false;
-  }
-}
-
-// (Opcional) Setear temperatura objetivo
+// Setear temperatura objetivo
 export async function setTargetTemperature(target: number): Promise<boolean> {
   try {
     const res = await fetch('/api/target-temperature', {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({ target }),
+      body: JSON.stringify({ temperature: target }),
     });
     if (!res.ok) throw new Error('Error al setear temperatura objetivo');
     return true;
@@ -84,7 +60,7 @@ export async function setTargetTemperature(target: number): Promise<boolean> {
   }
 }
 
-// (Opcional) Obtener temperatura objetivo
+// Obtener temperatura objetivo
 export async function getTargetTemperature(): Promise<number | undefined> {
   try {
     const res = await fetch('/api/target-temperature');

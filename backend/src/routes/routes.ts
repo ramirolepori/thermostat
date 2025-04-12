@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { getTemperature } from '../hardware/sensor';
-import { turnOnRelay, turnOffRelay, getRelayState } from '../hardware/relay';
-import { setTargetTemperature, startThermostat, stopThermostat, setHysteresis } from '../services/logic';
+import { setTargetTemperature, startThermostat, stopThermostat, setHysteresis, getThermostatState } from '../services/logic';
 
 const router = Router();
 
@@ -13,22 +12,7 @@ router.get('/api/temperature', (_req, res) => {
 
 // Estado caldera
 router.get('/api/status', (_req, res) => {
-  res.json({ status: getRelayState() ? 'on' : 'off' });
-});
-
-// Encender o apagar la caldera
-router.post('/api/relay', (req, res) => {
-  const { state } = req.body;
-
-  if (state === 'on') {
-    turnOnRelay();
-    res.json({ status: 'on' });
-  } else if (state === 'off') {
-    turnOffRelay();
-    res.json({ status: 'off' });
-  } else {
-    res.status(400).json({ error: 'Invalid state. Use "on" or "off".' });
-  }
+  res.json({ status: getThermostatState() ? 'on' : 'off' });
 });
 
 // Obtener temperatura objetivo
