@@ -20,19 +20,21 @@ app.get('/api/status', (_req, res) => {
   res.json({ status: getRelayState() ? 'on' : 'off' });
 });
 
-// Encender caldera
-app.post('/api/relay/on', (_req, res) => {
-  turnOnRelay();
-  // Acá iría el control del GPIO para activar el relé
-  res.json({ status: 'on' });
+// Encender o apagar la caldera
+app.post('/api/relay', (req, res) => {
+  const { state } = req.body;
+
+  if (state === 'on') {
+    turnOnRelay();
+    res.json({ status: 'on' });
+  } else if (state === 'off') {
+    turnOffRelay();
+    res.json({ status: 'off' });
+  } else {
+    res.status(400).json({ error: 'Invalid state. Use "on" or "off".' });
+  }
 });
 
-// Apagar caldera
-app.post('/api/relay/off', (_req, res) => {
-  turnOffRelay();
-  // Acá iría el control del GPIO para desactivar el relé
-  res.json({ status: 'off' });
-});
 
 app.listen(PORT, () => {
   console.log(`✅ Backend corriendo en http://localhost:${PORT}`);

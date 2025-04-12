@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Thermometer, Power, Plus, Minus, Zap, Save } from "lucide-react"
 import SceneSelector from "./SceneSelector"
 import "../styles/Thermostat.css"
+import { getTemperature, getRelayState, turnOnRelay, turnOffRelay, setTargetTemperature, getTargetTemperature } from "../api/thermostatBackend"
 
 // Definición de la interfaz para las escenas
 interface Scene {
@@ -60,6 +61,55 @@ const Thermostat: React.FC = () => {
       setIsHeating(false) // Desactiva el calentamiento si se alcanza la temperatura objetivo
     }
   }, [currentTemp, targetTemp, isPowerOn])
+
+  // Fetch initial data from the backend
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const temp = await getTemperature()
+        const relayState = await getRelayState()
+        const targetTemp = await getTargetTemperature()
+
+        setCurrentTemp(temp)
+        setIsPowerOn(relayState === "on")
+        setTargetTemp(targetTemp)
+      } catch (error) {
+        console.error("Error fetching initial data:", error)
+      }
+    }
+
+    fetchInitialData()
+  }, [])
+
+  // Update relay state when power is toggled
+  useEffect(() => {
+    const updateRelayState = async () => {
+      try {
+        if (isPowerOn) {
+          await turnOnRelay()
+        } else {
+          await turnOffRelay()
+        }
+      } catch (error) {
+        console.error("Error updating relay state:", error)
+      }
+    }
+
+    updateRelayState()
+  }, [isPowerOn])
+
+  // Update target temperature in the backend
+  useEffect(() => {
+    const updateTargetTemp = async () => {
+      try {
+        await setTargetTemperature(targetTemp)
+      } catch (error) {
+        console.error("Error updating target temperature:", error)
+      }
+    }
+
+    updateTargetTemp()
+  }, [targetTemp])
 
   // Incrementa la temperatura objetivo
   const increaseTemp = () => {

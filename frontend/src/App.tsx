@@ -1,4 +1,5 @@
 
+import React from "react"
 import { useState } from "react"
 import Thermostat from "./components/Thermostat"
 import Automations from "./components/Automations"
