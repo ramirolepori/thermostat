@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getTemperature } from '../hardware/sensor';
-import { getTargetTemperature, setTargetTemperature, startThermostat, stopThermostat, setHysteresis, getThermostatState } from '../services/logic';
+import { getHysteresis, getTargetTemperature, setTargetTemperature, startThermostat, stopThermostat, setHysteresis, getThermostatState } from '../services/logic';
 
 const router = Router();
 
@@ -21,6 +21,12 @@ router.get('/api/target-temperature', (_req, res) => {
   res.json({ targetTemperature });
 });
 
+// Obtener hysteresis
+router.get('/api/hysteresis', (_req, res) => {
+    const hysteresis = getHysteresis();
+    res.json({ hysteresis });
+});
+
 // Establecer temperatura objetivo
 router.post('/api/target-temperature', (req, res) => {
   const { temperature } = req.body;
@@ -33,12 +39,24 @@ router.post('/api/target-temperature', (req, res) => {
   }
 });
 
+// Establecer hysteresis
+router.post('/api/hysteresis', (req, res) => {
+    const { hysteresis } = req.body;
+    
+    if (typeof hysteresis === 'number') {
+        setHysteresis(hysteresis);
+        res.json({ hysteresis });
+    } else {
+      res.status(400).json({ error: 'Se requiere un valor numérico para la hysteresis' });
+    }
+  });
+
 // Iniciar termostato
 router.post('/api/thermostat/start', (req, res) => {
-  const { targetTemperature, hysteresis } = req.body;
+  const { targetTemperature } = req.body;
   
   try {
-    startThermostat({ targetTemperature, hysteresis });
+    startThermostat({ targetTemperature });
     res.json({ status: 'started' });
   } catch (error) {
     res.status(500).json({ error: 'Error al iniciar el termostato' });

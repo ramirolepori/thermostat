@@ -122,6 +122,10 @@ export function setHysteresis(hysteresis: number): void {
   }
 }
 
+export function getHysteresis(): number {
+  return thermostatConfig.hysteresis;
+}
+
 /**
  * Obtiene el estado actual del termostato
  */
