@@ -11,6 +11,8 @@ interface ThermostatConfig {
 // Estado del termostato
 interface ThermostatState {
   currentTemperature: number; // Temperatura actual
+  targetTemperature: number; // Temperatura objetivo
+  hysteresis: number; // Histéresis configurada
   isHeating: boolean; // Estado de la calefacción
   lastUpdated: Date; // Última actualización del estado
   isRunning: boolean; // Si el termostato está activo o no
@@ -26,6 +28,8 @@ const DEFAULT_CONFIG: ThermostatConfig = {
 // Estado inicial
 let thermostatState: ThermostatState = {
   currentTemperature: 0,
+  targetTemperature: DEFAULT_CONFIG.targetTemperature,
+  hysteresis: DEFAULT_CONFIG.hysteresis,
   isHeating: false,
   lastUpdated: new Date(),
   isRunning: false,
