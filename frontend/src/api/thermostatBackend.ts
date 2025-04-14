@@ -10,7 +10,7 @@ interface StatusResponse {
   targetTemperature: number;
   hysteresis: number;
   isHeating: boolean;
-  lastUpdated: Date; // Changed from new Date() to Date
+  lastUpdated: Date;
   isRunning: boolean;
 }
 
@@ -18,72 +18,122 @@ interface TargetTemperatureResponse {
   target: number;
 }
 
+// Configuración de API base
+const API_BASE_URL = '/api';
+let isBackendAvailable = true;
+let backendCheckInProgress = false;
+let lastBackendCheckTime = 0;
+const BACKEND_CHECK_INTERVAL = 30000; // 30 segundos
+
 // Headers comunes
 const jsonHeaders = {
   'Content-Type': 'application/json',
 };
 
+// Función para verificar si el backend está disponible
+async function checkBackendAvailability(): Promise<boolean> {
+  if (backendCheckInProgress) return isBackendAvailable;
+  
+  const now = Date.now();
+  if (now - lastBackendCheckTime < BACKEND_CHECK_INTERVAL) return isBackendAvailable;
+  
+  try {
+    backendCheckInProgress = true;
+    const res = await fetch(`${API_BASE_URL}/temperature`, { 
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000) // Timeout de 5 segundos
+    });
+    
+    if (!res.ok) throw new Error(`Backend responded with status: ${res.status}`);
+    
+    // Comprueba que la respuesta es realmente JSON para detectar páginas HTML de error
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Backend responded with non-JSON content');
+    }
+    
+    await res.json(); // Confirma que la respuesta es JSON válido
+    
+    isBackendAvailable = true;
+  } catch (error) {
+    console.error('Backend availability check failed:', error);
+    isBackendAvailable = false;
+  } finally {
+    backendCheckInProgress = false;
+    lastBackendCheckTime = Date.now();
+  }
+  
+  return isBackendAvailable;
+}
+
+// Función base para realizar peticiones fetch con manejo de errores mejorado
+async function fetchWithErrorHandling<T>(
+  endpoint: string, 
+  options: RequestInit = {},
+  defaultValue?: T
+): Promise<T> {
+  // Verificar disponibilidad del backend (sólo una vez por intervalo)
+  if (!await checkBackendAvailability()) {
+    console.warn(`Skipping request to ${endpoint} - backend unavailable`);
+    throw new Error('Backend service unavailable');
+  }
+  
+  // Configuración por defecto
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers: {
+      'Accept': 'application/json',
+      ...jsonHeaders,
+      ...options.headers,
+    },
+    // Timeout para evitar cuelgues indefinidos
+    signal: options.signal || AbortSignal.timeout(10000)
+  };
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    // Verificar que es JSON antes de intentar parsearlo
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error(`Invalid Content-Type: ${contentType} for endpoint ${endpoint}`);
+      throw new Error('Invalid response format: expected JSON');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Error in ${endpoint}:`, error);
+    if (defaultValue !== undefined) {
+      return defaultValue;
+    }
+    throw error;
+  }
+}
+
 // Obtener la temperatura actual desde el backend
 export async function getTemperature(): Promise<number> {
   try {
-    const res = await fetch('/api/temperature');
-    if (!res.ok) throw new Error(`Error al obtener temperatura: ${res.status} ${res.statusText}`);
-    
-    // Depuración: verificar el contenido de la respuesta
-    const text = await res.text();
-    console.debug('Respuesta de /api/temperature:', text);
-    
-    // Intentar analizar la respuesta como JSON
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseError) {
-      console.error('Error parseando JSON en getTemperature:', parseError);
-      return NaN;
-    }
-    
+    const data = await fetchWithErrorHandling<TemperatureResponse>(
+      '/temperature',
+      {},
+      { temperature: NaN }
+    );
     return data.temperature;
   } catch (error) {
-    console.error('getTemperature:', error);
+    console.error('getTemperature failed:', error);
     return NaN;
   }
 }
 
 // Obtener el estado del termostato
-export async function getStatus(): Promise<StatusResponse> {
+export async function getStatus(): Promise<StatusResponse | null> {
   try {
-    const res = await fetch('/api/status');
-    if (!res.ok) throw new Error(`Error al obtener estado: ${res.status} ${res.statusText}`);
-    
-    // Depuración: verificar el contenido de la respuesta antes de intentar analizarlo
-    const text = await res.text();
-    console.debug('Respuesta de /api/status:', text);
-    
-    // Intentar analizar la respuesta como JSON
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseError) {
-      console.error('Error parseando JSON:', parseError);
-      // Si no es JSON válido, devolver valores por defecto
-      return { 
-        currentTemperature: NaN, 
-        targetTemperature: NaN, 
-        hysteresis: NaN, 
-        isHeating: false, 
-        lastUpdated: new Date(), 
-        isRunning: false 
-      };
-    }
-    
-    // Asegurarse de que lastUpdated sea una instancia de Date
-    return {
-      ...data,
-      lastUpdated: new Date(data.lastUpdated || Date.now())
-    };
-  } catch (error) {
-    console.error('getStatus:', error);
-    return { 
+    const defaultStatus: StatusResponse = { 
       currentTemperature: NaN, 
       targetTemperature: NaN, 
       hysteresis: NaN, 
@@ -91,21 +141,30 @@ export async function getStatus(): Promise<StatusResponse> {
       lastUpdated: new Date(), 
       isRunning: false 
     };
+    
+    const data = await fetchWithErrorHandling<StatusResponse>('/status', {}, defaultStatus);
+    
+    // Asegurarse de que lastUpdated sea una instancia de Date
+    return {
+      ...data,
+      lastUpdated: new Date(data.lastUpdated || Date.now())
+    };
+  } catch (error) {
+    console.error('getStatus failed:', error);
+    return null;
   }
 }
 
 // Setear temperatura objetivo
 export async function setTargetTemperature(target: number): Promise<boolean> {
   try {
-    const res = await fetch('/api/target-temperature', {
+    await fetchWithErrorHandling('/target-temperature', {
       method: 'POST',
-      headers: jsonHeaders,
       body: JSON.stringify({ temperature: target }),
     });
-    if (!res.ok) throw new Error('Error al setear temperatura objetivo');
     return true;
   } catch (error) {
-    console.error('setTargetTemperature:', error);
+    console.error('setTargetTemperature failed:', error);
     return false;
   }
 }
@@ -113,26 +172,14 @@ export async function setTargetTemperature(target: number): Promise<boolean> {
 // Obtener temperatura objetivo
 export async function getTargetTemperature(): Promise<number | undefined> {
   try {
-    const res = await fetch('/api/target-temperature');
-    if (!res.ok) throw new Error(`Error al obtener temperatura objetivo: ${res.status} ${res.statusText}`);
-    
-    // Depuración: verificar el contenido de la respuesta antes de intentar analizarlo
-    const text = await res.text();
-    console.debug('Respuesta de /api/target-temperature:', text);
-    
-    // Intentar analizar la respuesta como JSON
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseError) {
-      console.error('Error parseando JSON en getTargetTemperature:', parseError);
-      // Si no es JSON válido, devolver undefined
-      return undefined;
-    }
-    
+    const data = await fetchWithErrorHandling<TargetTemperatureResponse>(
+      '/target-temperature',
+      {},
+      { target: NaN }
+    );
     return data.target;
   } catch (error) {
-    console.error('getTargetTemperature:', error);
+    console.error('getTargetTemperature failed:', error);
     return undefined;
   }
 }
@@ -140,15 +187,27 @@ export async function getTargetTemperature(): Promise<number | undefined> {
 // Iniciar termostato
 export async function startThermostat(targetTemperature?: number, hysteresis?: number): Promise<boolean> {
   try {
-    const res = await fetch('/api/thermostat/start', {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ temperature: targetTemperature, hysteresis: hysteresis }),
-    });
-    if (!res.ok) throw new Error('Error al setear temperatura objetivo');
+    // Probamos con diferentes métodos HTTP ya que el error 405 indica que el método POST podría no ser permitido
+    try {
+      await fetchWithErrorHandling('/thermostat/start', {
+        method: 'POST',
+        body: JSON.stringify({ temperature: targetTemperature, hysteresis: hysteresis }),
+      });
+    } catch (error) {
+      if (error.message?.includes('405')) {
+        // Intentar con método PUT si POST falla con 405
+        console.warn('POST method not allowed for thermostat/start, attempting PUT');
+        await fetchWithErrorHandling('/thermostat/start', {
+          method: 'PUT',
+          body: JSON.stringify({ temperature: targetTemperature, hysteresis: hysteresis }),
+        });
+      } else {
+        throw error;
+      }
+    }
     return true;
   } catch (error) {
-    console.error('startThermostat:', error);
+    console.error('startThermostat failed:', error);
     return false;
   }
 }
@@ -156,14 +215,17 @@ export async function startThermostat(targetTemperature?: number, hysteresis?: n
 // Detiene el termostato
 export async function stopThermostat(): Promise<boolean> {
   try {
-    const res = await fetch('/api/thermostat/stop', {
+    await fetchWithErrorHandling('/thermostat/stop', {
       method: 'POST',
-      headers: jsonHeaders,
     });
-    if (!res.ok) throw new Error('Error al detener el termostato');
     return true;
   } catch (error) {
-    console.error('stopThermostat:', error);
+    console.error('stopThermostat failed:', error);
     return false;
   }
+}
+
+// Verificar conectividad del backend (utilidad pública)
+export async function checkBackendConnectivity(): Promise<boolean> {
+  return await checkBackendAvailability();
 }
