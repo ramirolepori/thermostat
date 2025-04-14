@@ -27,8 +27,21 @@ const jsonHeaders = {
 export async function getTemperature(): Promise<number> {
   try {
     const res = await fetch('/api/temperature');
-    if (!res.ok) throw new Error('Error al obtener temperatura');
-    const data: TemperatureResponse = await res.json();
+    if (!res.ok) throw new Error(`Error al obtener temperatura: ${res.status} ${res.statusText}`);
+    
+    // Depuración: verificar el contenido de la respuesta
+    const text = await res.text();
+    console.debug('Respuesta de /api/temperature:', text);
+    
+    // Intentar analizar la respuesta como JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Error parseando JSON en getTemperature:', parseError);
+      return NaN;
+    }
+    
     return data.temperature;
   } catch (error) {
     console.error('getTemperature:', error);
@@ -40,15 +53,33 @@ export async function getTemperature(): Promise<number> {
 export async function getStatus(): Promise<StatusResponse> {
   try {
     const res = await fetch('/api/status');
-    if (!res.ok) throw new Error('Error al obtener estado');
+    if (!res.ok) throw new Error(`Error al obtener estado: ${res.status} ${res.statusText}`);
     
-    // Procesar directamente la respuesta ya que el backend ahora devuelve el formato correcto
-    const data = await res.json();
+    // Depuración: verificar el contenido de la respuesta antes de intentar analizarlo
+    const text = await res.text();
+    console.debug('Respuesta de /api/status:', text);
+    
+    // Intentar analizar la respuesta como JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Error parseando JSON:', parseError);
+      // Si no es JSON válido, devolver valores por defecto
+      return { 
+        currentTemperature: NaN, 
+        targetTemperature: NaN, 
+        hysteresis: NaN, 
+        isHeating: false, 
+        lastUpdated: new Date(), 
+        isRunning: false 
+      };
+    }
     
     // Asegurarse de que lastUpdated sea una instancia de Date
     return {
       ...data,
-      lastUpdated: new Date(data.lastUpdated)
+      lastUpdated: new Date(data.lastUpdated || Date.now())
     };
   } catch (error) {
     console.error('getStatus:', error);
@@ -83,8 +114,22 @@ export async function setTargetTemperature(target: number): Promise<boolean> {
 export async function getTargetTemperature(): Promise<number | undefined> {
   try {
     const res = await fetch('/api/target-temperature');
-    if (!res.ok) throw new Error('Error al obtener temperatura objetivo');
-    const data: TargetTemperatureResponse = await res.json();
+    if (!res.ok) throw new Error(`Error al obtener temperatura objetivo: ${res.status} ${res.statusText}`);
+    
+    // Depuración: verificar el contenido de la respuesta antes de intentar analizarlo
+    const text = await res.text();
+    console.debug('Respuesta de /api/target-temperature:', text);
+    
+    // Intentar analizar la respuesta como JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Error parseando JSON en getTargetTemperature:', parseError);
+      // Si no es JSON válido, devolver undefined
+      return undefined;
+    }
+    
     return data.target;
   } catch (error) {
     console.error('getTargetTemperature:', error);
