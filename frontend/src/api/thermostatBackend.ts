@@ -24,7 +24,7 @@ let isBackendAvailable = true;
 let backendCheckInProgress = false;
 let lastBackendCheckTime = 0;
 const BACKEND_CHECK_INTERVAL = 30000; // 30 segundos
-const BACKEND_CHECK_TIMEOUT = 1000; // Reducir de 3 segundos a 1 segundo para verificaciones de disponibilidad
+const BACKEND_CHECK_TIMEOUT = 3000; // 3 segundos
 
 // Headers comunes
 const jsonHeaders = {
