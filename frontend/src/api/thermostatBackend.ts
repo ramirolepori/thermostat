@@ -93,17 +93,32 @@ export async function getTargetTemperature(): Promise<number | undefined> {
 }
 
 // Iniciar termostato
-export async function startThermostat(target: number): Promise<boolean> {
+export async function startThermostat(targetTemperature?: number, hysteresis?: number): Promise<boolean> {
   try {
-    const res = await fetch('/api/target-temperature', {
+    const res = await fetch('/api/thermostat/start', {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({ temperature: target }),
+      body: JSON.stringify({ temperature: targetTemperature, hysteresis: hysteresis }),
     });
     if (!res.ok) throw new Error('Error al setear temperatura objetivo');
     return true;
   } catch (error) {
-    console.error('setTargetTemperature:', error);
+    console.error('startThermostat:', error);
+    return false;
+  }
+}
+
+// Detiene el termostato
+export async function stopThermostat(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/thermostat/stop', {
+      method: 'POST',
+      headers: jsonHeaders,
+    });
+    if (!res.ok) throw new Error('Error al detener el termostato');
+    return true;
+  } catch (error) {
+    console.error('stopThermostat:', error);
     return false;
   }
 }
