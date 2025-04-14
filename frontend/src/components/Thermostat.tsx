@@ -56,52 +56,63 @@ const Thermostat: React.FC = () => {
     updateInProgress.current = true;
     
     try {
-      // Verificar conectividad del backend primero
-      const isConnected = await checkBackendConnectivity();
+      // Verificar conectividad del backend primero con manejo de errores mejorado
+      let isConnected = false;
+      try {
+        isConnected = await checkBackendConnectivity();
+      } catch (connError) {
+        console.error("Error durante la verificación de conectividad:", connError);
+        isConnected = false;
+      }
+      
       setBackendConnected(isConnected);
       
       if (!isConnected) {
         setError("No se puede conectar al sistema del termostato. Intente nuevamente.");
+        updateInProgress.current = false;
         return;
       }
       
       // Si el termostato está apagado y no es una actualización forzada, no buscar datos
       if (!isPowerOn && !forceFetch) {
         setError(null);
+        updateInProgress.current = false;
         return;
       }
       
       // Obtener datos en paralelo cuando sea posible para reducir tiempo de espera
-      const tempPromise = getTemperature();
-      const statusPromise = getStatus();
-      
-      // Procesar primero la temperatura para actualización rápida de UI
-      const tempResponse = await tempPromise;
-      if (!isNaN(tempResponse)) {
-        setCurrentTemp(tempResponse);
-      }
-      
-      // Procesar el estado completo
-      const statusResponse = await statusPromise;
-      if (statusResponse) {
-        setIsHeating(statusResponse.isHeating || false);
+      try {
+        const tempPromise = getTemperature();
+        const statusPromise = getStatus();
         
-        // Solo actualizar temperatura objetivo si el valor es válido
-        if (statusResponse.targetTemperature && !isNaN(statusResponse.targetTemperature)) {
-          setTargetTemp(statusResponse.targetTemperature);
+        // Procesar primero la temperatura para actualización rápida de UI
+        const tempResponse = await tempPromise;
+        if (!isNaN(tempResponse)) {
+          setCurrentTemp(tempResponse);
         }
         
-        // Sincronizar el estado de encendido con el backend
-        setIsPowerOn(statusResponse.isRunning);
-      }
-      
-      // Limpiar error si todo fue exitoso
-      setError(null);
-    } catch (err) {
-      console.error("Error actualizando datos del termostato:", err);
-      // Solo mostrar error en la UI para actualizaciones explícitamente solicitadas
-      if (forceFetch) {
-        setError("Error al actualizar datos del termostato. Intente nuevamente.");
+        // Procesar el estado completo
+        const statusResponse = await statusPromise;
+        if (statusResponse) {
+          setIsHeating(statusResponse.isHeating || false);
+          
+          // Solo actualizar temperatura objetivo si el valor es válido
+          if (statusResponse.targetTemperature && !isNaN(statusResponse.targetTemperature)) {
+            setTargetTemp(statusResponse.targetTemperature);
+          }
+          
+          // Sincronizar el estado de encendido con el backend
+          setIsPowerOn(statusResponse.isRunning);
+        }
+        
+        // Limpiar error si todo fue exitoso
+        setError(null);
+      } catch (dataError) {
+        console.error("Error obteniendo datos del termostato:", dataError);
+        // Solo mostrar error en la UI para actualizaciones explícitamente solicitadas
+        if (forceFetch) {
+          setError("Error al actualizar datos del termostato. Intente nuevamente.");
+        }
       }
     } finally {
       updateInProgress.current = false;

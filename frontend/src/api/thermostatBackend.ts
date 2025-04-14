@@ -39,23 +39,37 @@ async function checkBackendAvailability(): Promise<boolean> {
   
   try {
     backendCheckInProgress = true;
-    const res = await fetch(`${API_BASE_URL}/temperature`, { 
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(5000) // Timeout de 5 segundos
-    });
     
-    if (!res.ok) throw new Error(`Backend responded with status: ${res.status}`);
+    // Usar un timeout más corto para evitar bloquear la UI
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 segundos
     
-    // Comprueba que la respuesta es realmente JSON para detectar páginas HTML de error
-    const contentType = res.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('Backend responded with non-JSON content');
+    try {
+      const res = await fetch(`${API_BASE_URL}/temperature`, { 
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      
+      // Limpiar el timeout
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) throw new Error(`Backend responded with status: ${res.status}`);
+      
+      // Comprueba que la respuesta es realmente JSON para detectar páginas HTML de error
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Backend responded with non-JSON content');
+      }
+      
+      await res.json(); // Confirma que la respuesta es JSON válido
+      
+      isBackendAvailable = true;
+    } catch (error) {
+      // Limpiar el timeout en caso de error
+      clearTimeout(timeoutId);
+      throw error; // Re-lanzar para ser capturado por el try/catch exterior
     }
-    
-    await res.json(); // Confirma que la respuesta es JSON válido
-    
-    isBackendAvailable = true;
   } catch (error) {
     console.error('Backend availability check failed:', error);
     isBackendAvailable = false;
@@ -85,14 +99,24 @@ async function fetchWithErrorHandling<T>(
     headers: {
       'Accept': 'application/json',
       ...jsonHeaders,
-      ...options.headers,
-    },
-    // Timeout para evitar cuelgues indefinidos
-    signal: options.signal || AbortSignal.timeout(10000)
+      ...(options.headers || {})
+    }
   };
+  
+  // Usar un controlador de aborto con timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos
+  
+  // Asignar la señal del controlador si no hay una ya configurada
+  if (!options.signal) {
+    fetchOptions.signal = controller.signal;
+  }
   
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions);
+    
+    // Limpiar el timeout
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -107,11 +131,24 @@ async function fetchWithErrorHandling<T>(
     
     return await response.json();
   } catch (error) {
-    console.error(`Error in ${endpoint}:`, error);
+    // Limpiar el timeout en caso de error
+    clearTimeout(timeoutId);
+    
+    // Mejorar los mensajes de error para errores de red
+    let errorMessage = error.message || 'Unknown error';
+    
+    if (error.name === 'AbortError') {
+      errorMessage = 'Request timeout - the server took too long to respond';
+    } else if (errorMessage.includes('NetworkError') || errorMessage.includes('network')) {
+      errorMessage = 'Network connection error - check your internet connection';
+    }
+    
+    console.error(`Error in ${endpoint}:`, errorMessage);
+    
     if (defaultValue !== undefined) {
       return defaultValue;
     }
-    throw error;
+    throw new Error(errorMessage);
   }
 }
 
