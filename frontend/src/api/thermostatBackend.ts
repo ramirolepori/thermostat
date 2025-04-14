@@ -24,6 +24,7 @@ let isBackendAvailable = true;
 let backendCheckInProgress = false;
 let lastBackendCheckTime = 0;
 const BACKEND_CHECK_INTERVAL = 30000; // 30 segundos
+const BACKEND_CHECK_TIMEOUT = 1000; // Reducir de 3 segundos a 1 segundo para verificaciones de disponibilidad
 
 // Headers comunes
 const jsonHeaders = {
@@ -42,13 +43,15 @@ async function checkBackendAvailability(): Promise<boolean> {
     
     // Usar un timeout más corto para evitar bloquear la UI
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 segundos
+    const timeoutId = setTimeout(() => controller.abort(), BACKEND_CHECK_TIMEOUT);
     
     try {
+      // Usar una ruta ligera para la verificación de disponibilidad
       const res = await fetch(`${API_BASE_URL}/temperature`, { 
         method: 'GET',
         headers: { 'Accept': 'application/json' },
-        signal: controller.signal
+        signal: controller.signal,
+        cache: 'no-store' // No guardar caché para este tipo de petición
       });
       
       // Limpiar el timeout
@@ -103,9 +106,10 @@ async function fetchWithErrorHandling<T>(
     }
   };
   
-  // Usar un controlador de aborto con timeout
+  // Usar un controlador de aborto con timeout reducido
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos
+  // Reducir de 5 segundos a 2 segundos para que la interfaz no parezca bloqueada
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
   
   // Asignar la señal del controlador si no hay una ya configurada
   if (!options.signal) {

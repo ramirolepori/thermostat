@@ -1,5 +1,5 @@
 // Importaciones necesarias para React y componentes adicionales
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Thermometer, Power, Plus, Minus, Zap, Save, AlertTriangle } from "lucide-react";
 import SceneSelector from "./SceneSelector";
 import "../styles/Thermostat.css";
@@ -325,6 +325,94 @@ const Thermostat: React.FC = () => {
     setError(null);
   }, [newSceneName, targetTemp, scenes]);
 
+  // Memoizar componentes y valores calculados para reducir renderizados
+
+  // Componente de error memoizado para evitar re-renderizados innecesarios
+  const ErrorBanner = useMemo(() => {
+    if (!error) return null;
+    return (
+      <div className="error-banner">
+        <AlertTriangle size={16} />
+        <span>{error}</span>
+        <button onClick={() => setError(null)}>×</button>
+      </div>
+    );
+  }, [error]);
+
+  // Memoizar componente de temperatura para evitar re-renderizados
+  const TemperatureControls = useMemo(() => (
+    <div className="temperature-display">
+      <div className="current-temp">
+        <Thermometer className="temp-icon" />
+        <span>{currentTemp !== null && !isNaN(currentTemp) ? currentTemp.toFixed(1) : "--"}°C</span>
+        {isHeating && <Zap className="heating-icon" />}
+      </div>
+
+      <div className={`target-temp ${!isPowerOn ? "disabled" : ""}`}>
+        <button
+          className="temp-button decrease"
+          onClick={decreaseTemp}
+          disabled={!isPowerOn}
+          aria-label="Decrease temperature"
+        >
+          <Minus size={20} />
+        </button>
+
+        <span>{targetTemp !== null && !isNaN(targetTemp) ? targetTemp.toFixed(1) : "--"}°C</span>
+
+        <button
+          className="temp-button increase"
+          onClick={increaseTemp}
+          disabled={!isPowerOn}
+          aria-label="Increase temperature"
+        >
+          <Plus size={20} />
+        </button>
+      </div>
+    </div>
+  ), [currentTemp, targetTemp, isHeating, isPowerOn, decreaseTemp, increaseTemp]);
+
+  // Componente de creación de escena optimizado
+  const SceneCreator = useMemo(() => {
+    if (!isCreatingScene) {
+      return (
+        <button
+          className="add-scene-button"
+          onClick={() => setIsCreatingScene(true)}
+          disabled={!isPowerOn}
+        >
+          Add New Scene
+        </button>
+      );
+    }
+
+    return (
+      <div className="new-scene-form">
+        <input
+          type="text"
+          value={newSceneName}
+          onChange={(e) => setNewSceneName(e.target.value)}
+          placeholder="Scene name"
+          className="scene-input"
+        />
+        <div className="scene-form-buttons">
+          <button className="save-button" onClick={saveNewScene}>
+            <Save size={16} /> Save
+          </button>
+          <button
+            className="cancel-button"
+            onClick={() => {
+              setIsCreatingScene(false);
+              setError(null);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }, [isCreatingScene, newSceneName, isPowerOn, saveNewScene]);
+
   // Renderizar pantalla de carga
   if (loading) {
     return (
@@ -358,13 +446,7 @@ const Thermostat: React.FC = () => {
   return (
     <div className="thermostat-container">
       {/* Mostrar banda de error si existe */}
-      {error && (
-        <div className="error-banner">
-          <AlertTriangle size={16} />
-          <span>{error}</span>
-          <button onClick={() => setError(null)}>×</button>
-        </div>
-      )}
+      {ErrorBanner}
 
       <div className="thermostat">
         {/* Controles principales del termostato */}
@@ -377,35 +459,7 @@ const Thermostat: React.FC = () => {
             <Power size={24} />
           </button>
 
-          <div className="temperature-display">
-            <div className="current-temp">
-              <Thermometer className="temp-icon" />
-              <span>{currentTemp !== null && !isNaN(currentTemp) ? currentTemp.toFixed(1) : "--"}°C</span>
-              {isHeating && <Zap className="heating-icon" />}
-            </div>
-
-            <div className={`target-temp ${!isPowerOn ? "disabled" : ""}`}>
-              <button
-                className="temp-button decrease"
-                onClick={decreaseTemp}
-                disabled={!isPowerOn}
-                aria-label="Decrease temperature"
-              >
-                <Minus size={20} />
-              </button>
-
-              <span>{targetTemp !== null && !isNaN(targetTemp) ? targetTemp.toFixed(1) : "--"}°C</span>
-
-              <button
-                className="temp-button increase"
-                onClick={increaseTemp}
-                disabled={!isPowerOn}
-                aria-label="Increase temperature"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-          </div>
+          {TemperatureControls}
         </div>
 
         {/* Sección de escenas */}
@@ -418,43 +472,12 @@ const Thermostat: React.FC = () => {
             disabled={!isPowerOn}
           />
 
-          {isCreatingScene ? (
-            <div className="new-scene-form">
-              <input
-                type="text"
-                value={newSceneName}
-                onChange={(e) => setNewSceneName(e.target.value)}
-                placeholder="Scene name"
-                className="scene-input"
-              />
-              <div className="scene-form-buttons">
-                <button className="save-button" onClick={saveNewScene}>
-                  <Save size={16} /> Save
-                </button>
-                <button
-                  className="cancel-button"
-                  onClick={() => {
-                    setIsCreatingScene(false);
-                    setError(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              className="add-scene-button"
-              onClick={() => setIsCreatingScene(true)}
-              disabled={!isPowerOn}
-            >
-              Add New Scene
-            </button>
-          )}
+          {SceneCreator}
         </div>
       </div>
     </div>
   );
 };
 
-export default Thermostat;
+// Usar React.memo para evitar renderizados innecesarios del componente
+export default React.memo(Thermostat);

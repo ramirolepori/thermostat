@@ -1,6 +1,4 @@
-
-import React from "react"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { Trash2 } from "lucide-react"
 import "../styles/Thermostat.css"
 
@@ -18,35 +16,49 @@ interface SceneSelectorProps {
   disabled: boolean
 }
 
-const SceneSelector: React.FC<SceneSelectorProps> = ({ scenes, onActivate, onDelete, disabled }) => {
+// Usar React.memo para evitar renderizados innecesarios
+const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActivate, onDelete, disabled }) => {
   const [contextMenu, setContextMenu] = useState<{ id: number; x: number; y: number } | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null)
   const [isMobile, setIsMobile] = useState(false)
 
-  // Detect if we're on a mobile device
+  // Detect if we're on a mobile device - optimizado con useCallback
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768)
     }
 
     checkMobile()
-    window.addEventListener("resize", checkMobile)
+    // Usar un debounce para resize para evitar múltiples rerenderizados
+    let resizeTimer: number | null = null;
+    const handleResize = () => {
+      if (resizeTimer !== null) {
+        clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(checkMobile, 100);
+    };
+
+    window.addEventListener("resize", handleResize)
 
     return () => {
-      window.removeEventListener("resize", checkMobile)
+      window.removeEventListener("resize", handleResize)
+      if (resizeTimer !== null) {
+        clearTimeout(resizeTimer);
+      }
     }
   }, [])
 
-  // Close context menu when clicking outside
+  // Close context menu when clicking outside - optimizado con useCallback
   useEffect(() => {
+    // Solo agregar event listeners si el menú contextual está abierto
+    if (!contextMenu) return;
+    
     const handleClickOutside = () => {
       setContextMenu(null)
     }
 
-    if (contextMenu) {
-      document.addEventListener("mousedown", handleClickOutside)
-      document.addEventListener("touchstart", handleClickOutside)
-    }
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("touchstart", handleClickOutside)
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
@@ -54,18 +66,18 @@ const SceneSelector: React.FC<SceneSelectorProps> = ({ scenes, onActivate, onDel
     }
   }, [contextMenu])
 
-  // Handle delete with confirmation
-  const handleDelete = (e: React.MouseEvent, sceneId: number) => {
+  // Handle delete with confirmation - optimizado con useCallback
+  const handleDelete = useCallback((e: React.MouseEvent, sceneId: number) => {
     e.stopPropagation() // Prevent activating the scene when clicking delete
     onDelete(sceneId)
     setContextMenu(null)
-  }
+  }, [onDelete])
 
-  // Handle long press for mobile
-  const handleTouchStart = (e: React.TouchEvent, sceneId: number) => {
+  // Handle long press for mobile - optimizado con useCallback
+  const handleTouchStart = useCallback((e: React.TouchEvent, sceneId: number) => {
     if (disabled) return
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       const touch = e.touches[0]
       const rect = e.currentTarget.getBoundingClientRect()
       setContextMenu({
@@ -76,24 +88,25 @@ const SceneSelector: React.FC<SceneSelectorProps> = ({ scenes, onActivate, onDel
     }, 500) // 500ms long press
 
     setLongPressTimer(timer)
-  }
+  }, [disabled])
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     if (longPressTimer) {
       clearTimeout(longPressTimer)
       setLongPressTimer(null)
     }
-  }
+  }, [longPressTimer])
 
-  const handleTouchMove = () => {
+  const handleTouchMove = useCallback(() => {
     // Cancel long press if user moves finger
     if (longPressTimer) {
       clearTimeout(longPressTimer)
       setLongPressTimer(null)
     }
-  }
+  }, [longPressTimer])
 
-  return (
+  // Memoizar la lista de escenas para evitar recálculo
+  const scenesList = useMemo(() => (
     <div className="scenes-list">
       {scenes.map((scene) => (
         <div
@@ -105,7 +118,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = ({ scenes, onActivate, onDel
         >
           <button
             className={`scene-button ${scene.active ? "active-scene" : ""}`}
-            onClick={() => onActivate(scene.id)}
+            onClick={() => !disabled && onActivate(scene.id)}
             disabled={disabled}
           >
             <span className="scene-name">{scene.name}</span>
@@ -143,7 +156,9 @@ const SceneSelector: React.FC<SceneSelectorProps> = ({ scenes, onActivate, onDel
         </div>
       ))}
     </div>
-  )
-}
+  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate])
 
-export default SceneSelector
+  return scenesList;
+});
+
+export default React.memo(SceneSelector);

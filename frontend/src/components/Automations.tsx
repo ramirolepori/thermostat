@@ -191,4 +191,4 @@ const Automations = () => {
   )
 }
 
-export default Automations
+export default React.memo(Automations);
