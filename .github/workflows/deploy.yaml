@@ -12,9 +12,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-
-      - name: Pull latest changes
-        run: git pull origin main
+        with:
+          fetch-depth: 0 # opcional, si necesitás todo el historial para alguna razón
 
       - name: Install backend dependencies
         run: |
