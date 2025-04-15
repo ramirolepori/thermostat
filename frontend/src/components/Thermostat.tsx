@@ -1,6 +1,5 @@
-// Importaciones necesarias para React y componentes adicionales
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Thermometer, Power, Plus, Minus, Zap, Save, AlertTriangle } from "lucide-react";
+import { Thermometer, Power, Plus, Minus, Zap, Save, AlertTriangle, Info } from "lucide-react";
 import SceneSelector from "./SceneSelector";
 import "../styles/Thermostat.css";
 import {
@@ -29,34 +28,67 @@ const initialScenes: Scene[] = [
   { id: 4, name: "Night", temperature: 20, active: false },
 ];
 
+// Detectar navegador Safari
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+// Constantes para optimizar el rendimiento
+const POLLING_INTERVAL = 8000; // Incrementado a 8 segundos para reducir peticiones
+const DEBOUNCE_INTERVAL = 500; // 500ms para debounce
+
 const Thermostat: React.FC = () => {
   // Estados para manejar la lógica del termostato
-  const [currentTemp, setCurrentTemp] = useState<number>(20); // Temperatura actual con valor por defecto
-  const [targetTemp, setTargetTemp] = useState<number>(22); // Temperatura objetivo con valor por defecto
-  const [isHeating, setIsHeating] = useState<boolean>(false); // Indica si está calentando
-  const [isPowerOn, setIsPowerOn] = useState<boolean>(false); // Indica si el termostato está encendido
-  const [scenes, setScenes] = useState<Scene[]>(initialScenes); // Lista de escenas
-  const [newSceneName, setNewSceneName] = useState(""); // Nombre de la nueva escena
-  const [isCreatingScene, setIsCreatingScene] = useState(false); // Indica si se está creando una nueva escena
-  const [loading, setLoading] = useState<boolean>(true); // Estado de carga
-  const [error, setError] = useState<string | null>(null); // Estado para manejar errores
-  const [backendConnected, setBackendConnected] = useState<boolean>(true); // Estado de conexión con el backend
-  const [retryCount, setRetryCount] = useState<number>(0); // Contador de reintentos
+  const [currentTemp, setCurrentTemp] = useState<number>(20);
+  const [targetTemp, setTargetTemp] = useState<number>(22);
+  const [isHeating, setIsHeating] = useState<boolean>(false);
+  const [isPowerOn, setIsPowerOn] = useState<boolean>(false);
+  const [scenes, setScenes] = useState<Scene[]>(() => {
+    // Cargar escenas desde localStorage si existen
+    try {
+      const savedScenes = localStorage.getItem('thermostatScenes');
+      return savedScenes ? JSON.parse(savedScenes) : initialScenes;
+    } catch (e) {
+      console.warn('Error loading scenes from localStorage', e);
+      return initialScenes;
+    }
+  });
+  const [newSceneName, setNewSceneName] = useState("");
+  const [isCreatingScene, setIsCreatingScene] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [backendConnected, setBackendConnected] = useState<boolean>(true);
+  const [retryCount, setRetryCount] = useState<number>(0);
+  const [showSafariWarning, setShowSafariWarning] = useState<boolean>(isSafari);
   
   // Referencias para gestionar polling y debounce
   const pollingInterval = useRef<number | null>(null);
   const updateInProgress = useRef<boolean>(false);
   const tempDebounceTimer = useRef<number | null>(null);
+  
+  // Memoria de los últimos datos para evitar renderizados innecesarios
+  const lastDataTimestamp = useRef<number>(0);
+
+  // Guardar escenas en localStorage cuando cambien
+  useEffect(() => {
+    try {
+      localStorage.setItem('thermostatScenes', JSON.stringify(scenes));
+    } catch (e) {
+      console.warn('Error saving scenes to localStorage', e);
+    }
+  }, [scenes]);
 
   // Función para actualizar datos del termostato con evitación de solicitudes duplicadas
   const updateThermostatData = useCallback(async (forceFetch: boolean = false) => {
-    // Evitar actualizaciones concurrentes
+    // Evitar actualizaciones concurrentes o innecesarias
     if (updateInProgress.current && !forceFetch) return;
+    
+    // Limitar la frecuencia de actualizaciones para no saturar la interfaz
+    const now = Date.now();
+    if (!forceFetch && now - lastDataTimestamp.current < 2000) return;
     
     updateInProgress.current = true;
     
     try {
-      // Verificar conectividad del backend primero con manejo de errores mejorado
+      // Verificar conectividad del backend primero
       let isConnected = false;
       try {
         isConnected = await checkBackendConnectivity();
@@ -80,30 +112,41 @@ const Thermostat: React.FC = () => {
         return;
       }
       
-      // Obtener datos en paralelo cuando sea posible para reducir tiempo de espera
+      // Obtener datos en paralelo cuando sea posible
       try {
-        const tempPromise = getTemperature();
-        const statusPromise = getStatus();
+        const [tempResponse, statusResponse] = await Promise.allSettled([
+          getTemperature(),
+          getStatus()
+        ]);
         
-        // Procesar primero la temperatura para actualización rápida de UI
-        const tempResponse = await tempPromise;
-        if (!isNaN(tempResponse)) {
-          setCurrentTemp(tempResponse);
+        // Procesar respuesta de temperatura
+        if (tempResponse.status === 'fulfilled' && !isNaN(tempResponse.value)) {
+          setCurrentTemp(prev => {
+            // Solo actualizar si hay un cambio real (> 0.1)
+            return Math.abs(prev - tempResponse.value) > 0.1 ? tempResponse.value : prev;
+          });
         }
         
-        // Procesar el estado completo
-        const statusResponse = await statusPromise;
-        if (statusResponse) {
-          setIsHeating(statusResponse.isHeating || false);
+        // Procesar respuesta de estado
+        if (statusResponse.status === 'fulfilled' && statusResponse.value) {
+          const status = statusResponse.value;
           
-          // Solo actualizar temperatura objetivo si el valor es válido
-          if (statusResponse.targetTemperature && !isNaN(statusResponse.targetTemperature)) {
-            setTargetTemp(statusResponse.targetTemperature);
+          // Actualizar estado de calentamiento
+          setIsHeating(status.isHeating || false);
+          
+          // Solo actualizar temperatura objetivo si es válida y ha cambiado
+          if (status.targetTemperature && !isNaN(status.targetTemperature)) {
+            setTargetTemp(prev => {
+              return Math.abs(prev - status.targetTemperature) > 0.1 ? status.targetTemperature : prev;
+            });
           }
           
           // Sincronizar el estado de encendido con el backend
-          setIsPowerOn(statusResponse.isRunning);
+          setIsPowerOn(status.isRunning);
         }
+        
+        // Actualizar timestamp del último dato recibido
+        lastDataTimestamp.current = Date.now();
         
         // Limpiar error si todo fue exitoso
         setError(null);
@@ -155,16 +198,39 @@ const Thermostat: React.FC = () => {
         clearInterval(pollingInterval.current);
       }
       
-      // Crear nuevo intervalo de polling (cada 5 segundos)
+      // Crear nuevo intervalo de polling (cada POLLING_INTERVAL ms)
       pollingInterval.current = window.setInterval(() => {
-        updateThermostatData();
-      }, 5000);
+        // Solo hacer polling si la ventana está activa
+        if (!document.hidden) {
+          updateThermostatData();
+        }
+      }, POLLING_INTERVAL);
     };
     
     setupPollingInterval();
 
+    // Event listener para pausar/reanudar polling cuando la pestaña cambia de estado
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Si la pestaña está inactiva, pausar el polling
+        if (pollingInterval.current) {
+          clearInterval(pollingInterval.current);
+          pollingInterval.current = null;
+        }
+      } else {
+        // Si la pestaña vuelve a estar activa, reanudar el polling
+        setupPollingInterval();
+        // Actualizar datos inmediatamente
+        updateThermostatData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Limpieza al desmontar el componente
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      
       if (pollingInterval.current) {
         clearInterval(pollingInterval.current);
         pollingInterval.current = null;
@@ -195,7 +261,7 @@ const Thermostat: React.FC = () => {
       clearTimeout(tempDebounceTimer.current);
     }
     
-    // Configurar nuevo timer de debounce (500ms)
+    // Configurar nuevo timer de debounce (DEBOUNCE_INTERVAL ms)
     tempDebounceTimer.current = window.setTimeout(async () => {
       try {
         const success = await setTargetTemperature(newTemp);
@@ -208,7 +274,7 @@ const Thermostat: React.FC = () => {
         console.error("Error setting target temperature:", error);
         setError("Error al establecer la temperatura objetivo");
       }
-    }, 500);
+    }, DEBOUNCE_INTERVAL);
   }, []);
 
   // Incrementa la temperatura objetivo
@@ -293,9 +359,8 @@ const Thermostat: React.FC = () => {
 
   // Elimina una escena de la lista
   const deleteScene = useCallback((sceneId: number) => {
-    const updatedScenes = scenes.filter((scene) => scene.id !== sceneId);
-    setScenes(updatedScenes);
-  }, [scenes]);
+    setScenes(prevScenes => prevScenes.filter(scene => scene.id !== sceneId));
+  }, []);
 
   // Guarda una nueva escena
   const saveNewScene = useCallback(() => {
@@ -319,13 +384,11 @@ const Thermostat: React.FC = () => {
     };
 
     // Actualizar lista de escenas
-    setScenes([...scenes, newScene]);
+    setScenes(prevScenes => [...prevScenes, newScene]);
     setNewSceneName("");
     setIsCreatingScene(false);
     setError(null);
   }, [newSceneName, targetTemp, scenes]);
-
-  // Memoizar componentes y valores calculados para reducir renderizados
 
   // Componente de error memoizado para evitar re-renderizados innecesarios
   const ErrorBanner = useMemo(() => {
@@ -338,6 +401,18 @@ const Thermostat: React.FC = () => {
       </div>
     );
   }, [error]);
+
+  // Advertencia de Safari
+  const SafariWarning = useMemo(() => {
+    if (!showSafariWarning) return null;
+    return (
+      <div className="safari-warning">
+        <Info size={16} />
+        <span>Si experimentas problemas de conexión en Safari, prueba a usar Chrome o Firefox para una mejor experiencia.</span>
+        <button onClick={() => setShowSafariWarning(false)}>×</button>
+      </div>
+    );
+  }, [showSafariWarning]);
 
   // Memoizar componente de temperatura para evitar re-renderizados
   const TemperatureControls = useMemo(() => (
@@ -434,6 +509,12 @@ const Thermostat: React.FC = () => {
           <h2>Error de conexión</h2>
           <p>No se puede conectar al sistema del termostato.</p>
           <p>Verifique que el dispositivo esté encendido y conectado a la red.</p>
+          {isSafari && (
+            <p className="safari-note">
+              <strong>Nota:</strong> Los navegadores Safari pueden tener problemas de conectividad. 
+              Si es posible, intente con Chrome o Firefox.
+            </p>
+          )}
           <button className="retry-button" onClick={handleRetryConnection}>
             Reintentar conexión
           </button>
@@ -447,6 +528,9 @@ const Thermostat: React.FC = () => {
     <div className="thermostat-container">
       {/* Mostrar banda de error si existe */}
       {ErrorBanner}
+      
+      {/* Mostrar advertencia de Safari si corresponde */}
+      {SafariWarning}
 
       <div className="thermostat">
         {/* Controles principales del termostato */}
