@@ -1,6 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getTemperature } from '../hardware/sensor';
-import { getHysteresis, getTargetTemperature, setTargetTemperature, startThermostat, stopThermostat, setHysteresis, getThermostatState } from '../services/logic';
+import { 
+  getHysteresis,
+  getTargetTemperature, 
+  setTargetTemperature, 
+  startThermostat, 
+  stopThermostat, 
+  setHysteresis, 
+  getThermostatState,
+  getLastError,
+  resetThermostat
+} from '../services/logic';
 
 const router = Router();
 
@@ -75,6 +85,30 @@ const validateHysteresis = (req: HysteresisRequest, res: Response, next: NextFun
   next();
 };
 
+// Ruta de comprobación de estado del sistema
+router.get('/health', (_req: Request, res: Response) => {
+  try {
+    const lastError = getLastError();
+    const thermostatState = getThermostatState();
+    
+    res.status(200).json({
+      status: 'ok',
+      version: '1.2.0',
+      uptime: process.uptime(),
+      thermostatRunning: thermostatState.isRunning,
+      lastError: lastError,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error en endpoint /health:', error);
+    res.status(500).json({ 
+      status: 'error',
+      error: 'Error al verificar estado del sistema',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Ruta de temperatura con caché
 router.get('/temperature', (_req: Request, res: Response) => {
   try {
@@ -141,7 +175,8 @@ router.get('/status', (req: Request, res: Response) => {
       hysteresis: thermostatState.hysteresis,
       isHeating: thermostatState.isHeating,
       lastUpdated: thermostatState.lastUpdated,
-      isRunning: thermostatState.isRunning
+      isRunning: thermostatState.isRunning,
+      lastError: thermostatState.lastError
     });
   } catch (error) {
     console.error('Error en endpoint /status:', error);
@@ -179,7 +214,14 @@ router.post('/target-temperature', validateTemperature, (req: TemperatureRequest
     const { temperature } = req.body;
     
     // Ya validado por el middleware
-    setTargetTemperature(temperature!);
+    const success = setTargetTemperature(temperature!);
+    
+    if (!success) {
+      const lastError = getLastError();
+      return res.status(400).json({ 
+        error: lastError || 'Error al establecer la temperatura objetivo'
+      });
+    }
     
     // Invalidar caché
     temperatureCache.timestamp = 0;
@@ -198,7 +240,14 @@ router.post('/hysteresis', validateHysteresis, (req: HysteresisRequest, res: Res
     const { hysteresis } = req.body;
     
     // Ya validado por el middleware
-    setHysteresis(hysteresis!);
+    const success = setHysteresis(hysteresis!);
+    
+    if (!success) {
+      const lastError = getLastError();
+      return res.status(400).json({ 
+        error: lastError || 'Error al establecer la histéresis'
+      });
+    }
     
     // Invalidar caché
     lastStateETag = '';
@@ -242,7 +291,14 @@ router.post('/thermostat/start', (req: ThermostatConfigRequest, res: Response) =
       config.hysteresis = hysteresis;
     }
     
-    startThermostat(config);
+    const success = startThermostat(config);
+    
+    if (!success) {
+      const lastError = getLastError();
+      return res.status(500).json({ 
+        error: lastError || 'Error al iniciar el termostato' 
+      });
+    }
     
     // Invalidar caché
     temperatureCache.timestamp = 0;
@@ -258,7 +314,14 @@ router.post('/thermostat/start', (req: ThermostatConfigRequest, res: Response) =
 // Detener termostato
 router.post('/thermostat/stop', (_req: Request, res: Response) => {
   try {
-    stopThermostat();
+    const success = stopThermostat();
+    
+    if (!success) {
+      const lastError = getLastError();
+      return res.status(500).json({ 
+        error: lastError || 'Error al detener el termostato' 
+      });
+    }
     
     // Invalidar caché
     temperatureCache.timestamp = 0;
@@ -268,6 +331,36 @@ router.post('/thermostat/stop', (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error en endpoint /thermostat/stop:', error);
     res.status(500).json({ error: 'Error al detener el termostato' });
+  }
+});
+
+// Reiniciar el termostato (útil cuando ocurren errores)
+router.post('/thermostat/reset', (_req: Request, res: Response) => {
+  try {
+    const success = resetThermostat();
+    
+    if (!success) {
+      const lastError = getLastError();
+      return res.status(500).json({ 
+        error: lastError || 'Error al reiniciar el termostato' 
+      });
+    }
+    
+    // Invalidar caché
+    temperatureCache.timestamp = 0;
+    lastStateETag = '';
+    
+    const state = getThermostatState();
+    
+    res.status(200).json({ 
+      status: 'reset', 
+      running: state.isRunning,
+      targetTemperature: state.targetTemperature,
+      hysteresis: state.hysteresis
+    });
+  } catch (error) {
+    console.error('Error en endpoint /thermostat/reset:', error);
+    res.status(500).json({ error: 'Error al reiniciar el termostato' });
   }
 });
 

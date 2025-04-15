@@ -1,11 +1,12 @@
 import { getTemperature } from "../hardware/sensor";
-import { turnOnRelay, turnOffRelay, getRelayState } from "../hardware/relay";
+import { turnOnRelay, turnOffRelay, getRelayState, toggleRelay } from "../hardware/relay";
 
 // Configuración del termostato
 interface ThermostatConfig {
   targetTemperature: number; // Temperatura objetivo deseada
   hysteresis: number; // Diferencial para evitar ciclos frecuentes
   checkIntervalMs: number; // Intervalo para revisar la temperatura
+  maxConsecutiveErrors: number; // Máximo de errores consecutivos permitidos
 }
 
 // Estado del termostato
@@ -16,6 +17,8 @@ interface ThermostatState {
   isHeating: boolean; // Estado de la calefacción
   lastUpdated: Date; // Última actualización del estado
   isRunning: boolean; // Si el termostato está activo o no
+  lastError: string | null; // Último error ocurrido
+  consecutiveErrors: number; // Contador de errores consecutivos
 }
 
 // Valores predeterminados
@@ -23,6 +26,7 @@ const DEFAULT_CONFIG: ThermostatConfig = {
   targetTemperature: 22, // 22°C por defecto
   hysteresis: 1.5, // Diferencial de 1.5°C
   checkIntervalMs: 5000, // Revisar cada 5 segundos
+  maxConsecutiveErrors: 5, // Máximo de errores consecutivos antes de apagar el sistema
 };
 
 // Estado inicial
@@ -33,73 +37,140 @@ let thermostatState: ThermostatState = {
   isHeating: false,
   lastUpdated: new Date(),
   isRunning: false,
+  lastError: null,
+  consecutiveErrors: 0,
 };
 
 let thermostatConfig: ThermostatConfig = { ...DEFAULT_CONFIG };
 let thermostatInterval: NodeJS.Timeout | null = null;
+let lastControlAction = Date.now(); // Rastrear la última vez que se tomó una acción de control
+
+// Evento que se dispara cuando se detecta un error crítico
+type ErrorHandler = (error: string) => void;
+const errorHandlers: ErrorHandler[] = [];
+
+/**
+ * Registra un manejador para eventos de error crítico
+ */
+export function onCriticalError(handler: ErrorHandler): void {
+  errorHandlers.push(handler);
+}
 
 /**
  * Inicia el termostato con la configuración proporcionada
  */
-export function startThermostat(config: Partial<ThermostatConfig> = {}): void {
-  // Actualizar configuración con los valores proporcionados
-  thermostatConfig = {
-    ...DEFAULT_CONFIG,
-    ...config,
-  };
+export function startThermostat(config: Partial<ThermostatConfig> = {}): boolean {
+  try {
+    // Actualizar configuración con los valores proporcionados
+    thermostatConfig = {
+      ...DEFAULT_CONFIG,
+      ...config,
+    };
 
-  // Solo iniciar si no está ya corriendo
-  if (!thermostatState.isRunning) {
-    console.log(
-      `Iniciando termostato con temperatura objetivo: ${thermostatConfig.targetTemperature}°C`
-    );
-    console.log(`Histéresis configurada a: ${thermostatConfig.hysteresis}°C`);
+    // Solo iniciar si no está ya corriendo
+    if (!thermostatState.isRunning) {
+      console.log(
+        `Iniciando termostato con temperatura objetivo: ${thermostatConfig.targetTemperature}°C`
+      );
+      console.log(`Histéresis configurada a: ${thermostatConfig.hysteresis}°C`);
 
-    // Inicializar el estado
-    updateCurrentState();
+      // Inicializar el estado
+      thermostatState.lastError = null;
+      thermostatState.consecutiveErrors = 0;
+      const initialUpdateSuccess = updateCurrentState();
+      
+      if (!initialUpdateSuccess) {
+        console.warn("Advertencia: No se pudo leer la temperatura inicial, iniciando con valores predeterminados");
+      }
 
-    // Iniciar el intervalo para revisar la temperatura periódicamente
-    thermostatInterval = setInterval(() => {
-      updateCurrentState();
-      controlHeating();
-    }, thermostatConfig.checkIntervalMs);
+      // Iniciar el intervalo para revisar la temperatura periódicamente
+      thermostatInterval = setInterval(() => {
+        const stateUpdateSuccess = updateCurrentState();
+        if (stateUpdateSuccess) {
+          thermostatState.consecutiveErrors = 0; // Resetear contador de errores tras éxito
+          controlHeating();
+        } else {
+          thermostatState.consecutiveErrors++;
+          console.error(`Error consecutivo #${thermostatState.consecutiveErrors} al actualizar estado`);
+          
+          // Si hay demasiados errores consecutivos, apagar el sistema por seguridad
+          if (thermostatState.consecutiveErrors >= thermostatConfig.maxConsecutiveErrors) {
+            const errorMsg = `Demasiados errores consecutivos (${thermostatState.consecutiveErrors}), apagando termostato por seguridad`;
+            console.error(errorMsg);
+            notifyCriticalError(errorMsg);
+            stopThermostat();
+          }
+        }
+      }, thermostatConfig.checkIntervalMs);
 
-    thermostatState.isRunning = true;
-  } else {
-    console.log("El termostato ya está en funcionamiento");
+      thermostatState.isRunning = true;
+      return true;
+    } else {
+      console.log("El termostato ya está en funcionamiento");
+      return true;
+    }
+  } catch (error) {
+    const errorMsg = `Error al iniciar el termostato: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMsg);
+    thermostatState.lastError = errorMsg;
+    return false;
   }
 }
 
 /**
  * Detiene el termostato y apaga la calefacción
  */
-export function stopThermostat(): void {
-  if (thermostatState.isRunning && thermostatInterval) {
-    clearInterval(thermostatInterval);
-    thermostatInterval = null;
+export function stopThermostat(): boolean {
+  try {
+    if (thermostatState.isRunning && thermostatInterval) {
+      clearInterval(thermostatInterval);
+      thermostatInterval = null;
 
-    // Asegurar que la calefacción esté apagada al detener
-    if (thermostatState.isHeating) {
-      turnOffRelay();
-      thermostatState.isHeating = false;
+      // Asegurar que la calefacción esté apagada al detener
+      let relayTurnedOff = true;
+      if (thermostatState.isHeating) {
+        relayTurnedOff = turnOffRelay();
+        thermostatState.isHeating = false;
+      }
+
+      thermostatState.isRunning = false;
+      console.log("Termostato detenido");
+      
+      return relayTurnedOff;
     }
-
-    thermostatState.isRunning = false;
-    console.log("Termostato detenido");
+    return true;
+  } catch (error) {
+    const errorMsg = `Error al detener el termostato: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMsg);
+    thermostatState.lastError = errorMsg;
+    return false;
   }
 }
 
 /**
  * Actualiza la temperatura objetivo
  */
-export function setTargetTemperature(temperature: number): void {
-  thermostatConfig.targetTemperature = temperature;
-  console.log(`Temperatura objetivo actualizada a: ${temperature}°C`);
+export function setTargetTemperature(temperature: number): boolean {
+  try {
+    // Validar rango de temperatura
+    if (temperature < 5 || temperature > 30) {
+      throw new Error(`Temperatura fuera de rango válido: ${temperature}°C (debe estar entre 5-30°C)`);
+    }
+    
+    thermostatConfig.targetTemperature = temperature;
+    console.log(`Temperatura objetivo actualizada a: ${temperature}°C`);
 
-  // Si el termostato está ejecutándose, actualizar estado y verificar calefacción
-  if (thermostatState.isRunning) {
-    updateCurrentState();
-    controlHeating();
+    // Si el termostato está ejecutándose, actualizar estado y verificar calefacción
+    if (thermostatState.isRunning) {
+      updateCurrentState();
+      controlHeating();
+    }
+    return true;
+  } catch (error) {
+    const errorMsg = `Error al configurar temperatura objetivo: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMsg);
+    thermostatState.lastError = errorMsg;
+    return false;
   }
 }
 
@@ -113,12 +184,20 @@ export function getTargetTemperature(): number {
 /**
  * Actualiza la configuración de histéresis
  */
-export function setHysteresis(hysteresis: number): void {
-  if (hysteresis > 0) {
+export function setHysteresis(hysteresis: number): boolean {
+  try {
+    if (hysteresis <= 0 || hysteresis > 5) {
+      throw new Error(`Valor de histéresis inválido: ${hysteresis} (debe estar entre 0.1-5°C)`);
+    }
+    
     thermostatConfig.hysteresis = hysteresis;
     console.log(`Histéresis actualizada a: ${hysteresis}°C`);
-  } else {
-    console.error("La histéresis debe ser un valor positivo");
+    return true;
+  } catch (error) {
+    const errorMsg = `Error al configurar histéresis: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMsg);
+    thermostatState.lastError = errorMsg;
+    return false;
   }
 }
 
@@ -152,20 +231,80 @@ export function getThermostatConfig(): ThermostatConfig {
   return { ...thermostatConfig };
 }
 
+/**
+ * Obtiene el último error registrado
+ */
+export function getLastError(): string | null {
+  return thermostatState.lastError;
+}
+
+/**
+ * Reinicia el sistema de termostato (útil tras errores)
+ */
+export function resetThermostat(): boolean {
+  const wasRunning = thermostatState.isRunning;
+  const targetTemp = thermostatConfig.targetTemperature;
+  const hysteresis = thermostatConfig.hysteresis;
+  
+  const stopSuccess = stopThermostat();
+  if (!stopSuccess) {
+    return false;
+  }
+  
+  // Reiniciar contadores de error
+  thermostatState.consecutiveErrors = 0;
+  thermostatState.lastError = null;
+  
+  // Reiniciar sólo si estaba activo anteriormente
+  if (wasRunning) {
+    return startThermostat({
+      targetTemperature: targetTemp,
+      hysteresis: hysteresis
+    });
+  }
+  
+  return true;
+}
+
 // Funciones internas
 
 /**
- * Actualiza el estado actual leyendo la temperatura del sensor
+ * Notifica a los manejadores registrados sobre un error crítico
  */
-function updateCurrentState(): void {
-  const temperature = getTemperature();
+function notifyCriticalError(errorMessage: string): void {
+  errorHandlers.forEach(handler => {
+    try {
+      handler(errorMessage);
+    } catch (error) {
+      console.error("Error al ejecutar manejador de errores:", error);
+    }
+  });
+}
 
-  if (!isNaN(temperature)) {
-    thermostatState.currentTemperature = temperature;
-    thermostatState.isHeating = getRelayState();
-    thermostatState.lastUpdated = new Date();
-  } else {
-    console.error("Error: No se pudo leer la temperatura");
+/**
+ * Actualiza el estado actual leyendo la temperatura del sensor
+ * @returns boolean indicando si la actualización fue exitosa
+ */
+function updateCurrentState(): boolean {
+  try {
+    const temperature = getTemperature();
+
+    if (!isNaN(temperature)) {
+      thermostatState.currentTemperature = temperature;
+      thermostatState.isHeating = getRelayState();
+      thermostatState.lastUpdated = new Date();
+      return true;
+    } else {
+      const errorMsg = "Error: No se pudo leer la temperatura, valor NaN recibido";
+      console.error(errorMsg);
+      thermostatState.lastError = errorMsg;
+      return false;
+    }
+  } catch (error) {
+    const errorMsg = `Error al actualizar estado: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMsg);
+    thermostatState.lastError = errorMsg;
+    return false;
   }
 }
 
@@ -173,31 +312,56 @@ function updateCurrentState(): void {
  * Controla la calefacción según la temperatura y la histéresis
  */
 function controlHeating(): void {
-  const { targetTemperature, hysteresis } = thermostatConfig;
-  const { currentTemperature, isHeating } = thermostatState;
+  try {
+    const { targetTemperature, hysteresis } = thermostatConfig;
+    const { currentTemperature, isHeating } = thermostatState;
+    const now = Date.now();
+    
+    // Calcular límites de activación/desactivación
+    const lowerLimit = targetTemperature - hysteresis;
+    const upperLimit = targetTemperature;
 
-  // Calcular límites de activación/desactivación
-  const lowerLimit = targetTemperature - hysteresis;
-  const upperLimit = targetTemperature;
+    // Prevenir cambios de estado demasiado frecuentes (mínimo 30 segundos entre acciones)
+    const minActionInterval = 30000; // 30 segundos
+    if (now - lastControlAction < minActionInterval) {
+      return;
+    }
 
-  // Implementación de histéresis para control de calefacción
-  if (isHeating) {
-    // Si está calentando, verificar si alcanzó la temperatura objetivo
-    if (currentTemperature >= upperLimit) {
-      turnOffRelay();
-      thermostatState.isHeating = false;
-      console.log(
-        `Apagando calefacción: Temperatura actual ${currentTemperature}°C alcanzó el objetivo ${upperLimit}°C`
-      );
+    // Implementación de histéresis para control de calefacción
+    if (isHeating) {
+      // Si está calentando, verificar si alcanzó la temperatura objetivo
+      if (currentTemperature >= upperLimit) {
+        const success = turnOffRelay();
+        if (success) {
+          thermostatState.isHeating = false;
+          lastControlAction = now;
+          console.log(
+            `Apagando calefacción: Temperatura actual ${currentTemperature}°C alcanzó el objetivo ${upperLimit}°C`
+          );
+        } else {
+          console.error(`Error al intentar apagar el relé a ${upperLimit}°C`);
+          thermostatState.lastError = "Error al intentar apagar la calefacción";
+        }
+      }
+    } else {
+      // Si está apagado, verificar si debe encender
+      if (currentTemperature < lowerLimit) {
+        const success = turnOnRelay();
+        if (success) {
+          thermostatState.isHeating = true;
+          lastControlAction = now;
+          console.log(
+            `Encendiendo calefacción: Temperatura actual ${currentTemperature}°C por debajo del límite inferior ${lowerLimit}°C`
+          );
+        } else {
+          console.error(`Error al intentar encender el relé a ${lowerLimit}°C`);
+          thermostatState.lastError = "Error al intentar encender la calefacción";
+        }
+      }
     }
-  } else {
-    // Si está apagado, verificar si debe encender
-    if (currentTemperature < lowerLimit) {
-      turnOnRelay();
-      thermostatState.isHeating = true;
-      console.log(
-        `Encendiendo calefacción: Temperatura actual ${currentTemperature}°C por debajo del límite inferior ${lowerLimit}°C`
-      );
-    }
+  } catch (error) {
+    const errorMsg = `Error al controlar calefacción: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMsg);
+    thermostatState.lastError = errorMsg;
   }
 }

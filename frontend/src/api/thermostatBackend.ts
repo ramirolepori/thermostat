@@ -3,6 +3,7 @@
 // Interfaces de respuesta
 interface TemperatureResponse {
   temperature: number;
+  fromCache?: boolean;
 }
 
 interface StatusResponse {
@@ -12,10 +13,20 @@ interface StatusResponse {
   isHeating: boolean;
   lastUpdated: Date;
   isRunning: boolean;
+  lastError: string | null;
 }
 
 interface TargetTemperatureResponse {
   target: number;
+}
+
+interface HealthResponse {
+  status: string;
+  version: string;
+  uptime: number;
+  thermostatRunning: boolean;
+  lastError: string | null;
+  timestamp: string;
 }
 
 // Configuración de API base
@@ -81,12 +92,12 @@ async function checkBackendAvailability(): Promise<boolean> {
   try {
     backendCheckInProgress = true;
     
-    // Simplificamos la lógica para usar un solo enfoque de fetch con timeout
+    // Usar endpoint de health check para verificar disponibilidad
     const timeout = createSafeTimeout(BACKEND_CHECK_TIMEOUT);
     const controller = new AbortController();
     
     try {
-      const fetchPromise = fetch(`${API_BASE_URL}/temperature`, { 
+      const fetchPromise = fetch(`${API_BASE_URL}/health`, { 
         method: 'GET',
         headers: { 'Accept': 'application/json' },
         signal: controller.signal,
@@ -105,13 +116,19 @@ async function checkBackendAvailability(): Promise<boolean> {
       
       if (!res.ok) throw new Error(`Backend responded with status: ${res.status}`);
       
-      // Verificar que la respuesta es JSON sin parsear todo el contenido
+      // Verificar que la respuesta es JSON
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         throw new Error('Backend responded with non-JSON content');
       }
       
-      // No es necesario esperar a que se parsee todo el JSON para saber que el backend está disponible
+      // Opcional: verificar estado del sistema
+      const healthData: HealthResponse = await res.json();
+      if (healthData.status !== 'ok') {
+        console.warn('Backend health check returned non-OK status:', healthData.status);
+        console.warn('Last error reported by backend:', healthData.lastError);
+      }
+      
       isBackendAvailable = true;
     } catch (error) {
       timeout.clear();
@@ -199,7 +216,18 @@ async function fetchWithErrorHandling<T>(
     if (clearTimeoutFn) clearTimeoutFn();
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      // Intentar leer el mensaje de error del backend
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } catch (e) {
+        // Si no se puede leer el JSON, usar el mensaje por defecto
+      }
+      
+      throw new Error(errorMessage);
     }
     
     // Verificar que es JSON antes de intentar parsearlo
@@ -241,6 +269,21 @@ async function fetchWithErrorHandling<T>(
   }
 }
 
+// Comprobar estado de salud del backend
+export async function checkHealthStatus(): Promise<HealthResponse | null> {
+  try {
+    const data = await fetchWithErrorHandling<HealthResponse>(
+      '/health',
+      {},
+      undefined
+    );
+    return data;
+  } catch (error) {
+    console.error('checkHealthStatus failed:', error);
+    return null;
+  }
+}
+
 // Obtener la temperatura actual desde el backend
 export async function getTemperature(): Promise<number> {
   try {
@@ -265,7 +308,8 @@ export async function getStatus(): Promise<StatusResponse | null> {
       hysteresis: NaN, 
       isHeating: false, 
       lastUpdated: new Date(), 
-      isRunning: false 
+      isRunning: false,
+      lastError: null
     };
     
     const data = await fetchWithErrorHandling<StatusResponse>('/status', {}, defaultStatus);
@@ -314,7 +358,7 @@ export async function getTargetTemperature(): Promise<number | undefined> {
 export async function startThermostat(targetTemperature?: number, hysteresis?: number): Promise<boolean> {
   try {
     const bodyContent = JSON.stringify({ 
-      temperature: targetTemperature, 
+      targetTemperature: targetTemperature, 
       hysteresis: hysteresis 
     });
     
@@ -354,6 +398,19 @@ export async function stopThermostat(): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('stopThermostat failed:', error);
+    return false;
+  }
+}
+
+// Reinicia el termostato en caso de errores
+export async function resetThermostat(): Promise<boolean> {
+  try {
+    await fetchWithErrorHandling('/thermostat/reset', {
+      method: 'POST',
+    });
+    return true;
+  } catch (error) {
+    console.error('resetThermostat failed:', error);
     return false;
   }
 }
