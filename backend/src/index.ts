@@ -4,11 +4,30 @@ import helmet from 'helmet';
 import compression from 'compression';
 import routes from './routes/routes';
 import { startThermostat } from './services/logic';
-import { cpus } from 'os';
+import { cpus, networkInterfaces } from 'os';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces de red
 const isProd = process.env.NODE_ENV === 'production';
+
+// Función para obtener la IP del dispositivo
+function getLocalIP(): string {
+  const nets = networkInterfaces();
+  let localIP = 'localhost';
+  
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      // Omitir interfaces loopback e IPv6
+      if (net.family === 'IPv4' && !net.internal) {
+        localIP = net.address;
+        return localIP;
+      }
+    }
+  }
+  
+  return localIP;
+}
 
 // Aplicar middleware de seguridad básica (solo en producción)
 if (isProd) {
@@ -20,7 +39,7 @@ app.use(compression());
 
 // Configurar CORS con opciones más específicas
 app.use(cors({
-  origin: isProd ? ['https://yourdomain.com', /\.yourdomain\.com$/] : '*',
+  origin: '*', // Permitir solicitudes desde cualquier origen
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -72,8 +91,9 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 });
 
 // Iniciar el servidor
-app.listen(PORT, () => {
-  console.log(`✅ Backend corriendo en http://localhost:${PORT} (${isProd ? 'producción' : 'desarrollo'})`);
+app.listen(PORT, HOST, () => {
+  const localIP = getLocalIP();
+  console.log(`✅ Backend corriendo en http://${HOST === '0.0.0.0' ? localIP : HOST}:${PORT} (${isProd ? 'producción' : 'desarrollo'})`);
   console.log(`✅ Servidor optimizado para ${cpus().length} CPU(s)`);
   
   // Iniciar el termostato con la configuración predeterminada
