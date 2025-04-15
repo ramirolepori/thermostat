@@ -26,42 +26,7 @@ jobs:
           set -e
           cd backend
           npm run build
-
-      - name: Install and initialize pigpio
-        run: |
-          # Instalar pigpio a nivel de sistema si no está instalado
-          if ! dpkg -l | grep -q pigpio; then
-            sudo apt-get update
-            sudo apt-get install -y pigpio
-          fi
-          
-          # Detener cualquier instancia existente del daemon de pigpio
-          sudo killall pigpiod || true
-          
-          # Iniciar el daemon de pigpio con permisos adecuados
-          sudo pigpiod -l -m -n 200
-          
-          # Esperar a que el daemon inicie completamente
-          sleep 2
-          
-          # Comprobar que el daemon está funcionando
-          if pgrep pigpiod > /dev/null; then
-            echo "✅ Daemon pigpio iniciado correctamente"
-          else
-            echo "❌ Error: El daemon pigpio no pudo iniciarse"
-            exit 1
-          fi
-          
-          # Instalar pigpio para el usuario root (usado por sudo pm2)
-          if ! sudo npm list -g pigpio &> /dev/null; then
-            sudo npm install -g pigpio
-          fi
-          
-          # También instalar localmente en la aplicación
-          cd backend
-          sudo npm install --no-save pigpio
-          
-          echo "✅ pigpio configurado correctamente"
+          echo "✅ Backend construido correctamente"
 
       - name: Configure GPIO and 1-Wire permissions
         run: |
