@@ -43,9 +43,9 @@ jobs:
         run: |
           cd backend/src
           # Detener la aplicación anterior si está en ejecución
-          pm2 stop thermostat-backend || true
+          sudo pm2 stop thermostat-backend || true
           # Iniciar o reiniciar con la configuración actualizada
-          pm2 startOrRestart ecosystem.config.js
+          sudo pm2 startOrRestart ecosystem.config.js
 
       - name: Install frontend dependencies
         run: |
