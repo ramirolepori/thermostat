@@ -31,7 +31,7 @@ check_error() {
 }
 
 # Directorio del proyecto
-PROJECT_DIR="/home/pi/thermostat-mvp"
+PROJECT_DIR="/home/pi/thermostat"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="${PROJECT_DIR}_backup_${TIMESTAMP}"
 

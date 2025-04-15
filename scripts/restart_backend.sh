@@ -31,7 +31,7 @@ check_error() {
 }
 
 # Directorio del proyecto
-PROJECT_DIR="/home/pi/thermostat-mvp"
+PROJECT_DIR="/home/pi/thermostat"
 
 # 1. Verificar si el directorio del proyecto existe
 if [ ! -d "$PROJECT_DIR" ]; then
