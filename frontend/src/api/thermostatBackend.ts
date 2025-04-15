@@ -24,7 +24,7 @@ let isBackendAvailable = true;
 let backendCheckInProgress = false;
 let lastBackendCheckTime = 0;
 const BACKEND_CHECK_INTERVAL = 30000; // 30 segundos
-const BACKEND_CHECK_TIMEOUT = 15000; // 5 segundos
+const BACKEND_CHECK_TIMEOUT = 5000; // 5 segundos
 
 // Headers comunes
 const jsonHeaders = {
@@ -108,8 +108,8 @@ async function fetchWithErrorHandling<T>(
   
   // Usar un controlador de aborto con timeout reducido
   const controller = new AbortController();
-  // Reducir de 5 segundos a 2 segundos para que la interfaz no parezca bloqueada
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  // Aumentar timeout de 2 segundos a 5 segundos para dar más tiempo al servidor
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   
   // Asignar la señal del controlador si no hay una ya configurada
   if (!options.signal) {
