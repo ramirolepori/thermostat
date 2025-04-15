@@ -19,7 +19,7 @@ jobs:
         run: |
           set -e
           cd backend
-          npm ci
+          sudo npm ci
 
       - name: Build backend
         run: |
@@ -29,11 +29,21 @@ jobs:
 
       - name: Install pigpio if needed
         run: |
-          if ! npm list -g pigpio &> /dev/null; then
+          # Instalar pigpio a nivel de sistema
+          if ! dpkg -l | grep -q pigpio; then
             sudo apt-get update
             sudo apt-get install -y pigpio
+          fi
+          
+          # Instalar pigpio para el usuario root (usado por sudo pm2)
+          if ! sudo npm list -g pigpio &> /dev/null; then
             sudo npm install -g pigpio
           fi
+          
+          # También instalar localmente en la aplicación
+          cd backend
+          sudo npm install --no-save pigpio
+          
           echo "pigpio checked/installed"
 
       - name: Configure GPIO permissions
@@ -41,7 +51,7 @@ jobs:
           # Verificar si el directorio GPIO existe
           if [ -d "/sys/class/gpio" ]; then
             # Asegurar que el usuario tiene los permisos adecuados
-            sudo chown -R $USER:$USER /sys/class/gpio || true
+            sudo chown -R root:root /sys/class/gpio || true
             sudo chmod -R 777 /sys/class/gpio || true
             echo "Permisos GPIO configurados correctamente"
           else
@@ -55,6 +65,8 @@ jobs:
           sudo pm2 stop thermostat-backend || true
           # Iniciar o reiniciar con la configuración actualizada
           sudo pm2 startOrRestart ecosystem.config.js
+          # Guardar la configuración para que sobreviva a reinicios
+          sudo pm2 save
 
       - name: Install frontend dependencies
         run: |
