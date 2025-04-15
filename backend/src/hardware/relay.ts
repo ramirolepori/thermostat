@@ -1,33 +1,25 @@
 import { platform } from 'os';
 
-// Usar pigpio solo en Linux/Raspberry Pi
-let Gpio: any;
-if (platform() !== 'win32') {
-  try {
-    Gpio = require('pigpio').Gpio;
-  } catch (e) {
-    console.error('No se pudo cargar pigpio:', e);
-  }
-}
-
+// Variables para controlar GPIO
+let GPIO: any;
 const GPIO_PIN = 17;     // GPIO 17 (pin 11) como salida
-const RELAY_ON = 0;      // Valor para activar el relé (lógica inversa)
-const RELAY_OFF = 1;     // Valor para desactivar el relé
+const RELAY_ON = 1;      // Valor para activar el relé (GPIO.HIGH)
+const RELAY_OFF = 0;     // Valor para desactivar el relé (GPIO.LOW)
 
 const isWindowsOS = platform() === 'win32';
-let simulationMode = isWindowsOS || !Gpio;
+let simulationMode = isWindowsOS;
 
 let relay: any;
 let relayState = false;
 
+// Función para crear un relé simulado en Windows
 const createSimulatedRelay = () => ({
-  digitalWrite: (value: number) => {
+  output: (value: number) => {
     const state = value === RELAY_ON ? 'ENCENDIDO' : 'APAGADO';
     console.log(`SIMULACIÓN: Relé ${state}`);
     return true;
   },
-  mode: (_: any) => {},
-  unexport: () => console.log('SIMULACIÓN: Relé liberado')
+  cleanup: () => console.log('SIMULACIÓN: Relé liberado')
 });
 
 try {
@@ -35,9 +27,37 @@ try {
     relay = createSimulatedRelay();
     console.log(`Modo simulación activado para el relé (Sistema: ${platform()})`);
   } else {
-    relay = new Gpio(GPIO_PIN, {mode: Gpio.OUTPUT});
-    relay.digitalWrite(RELAY_OFF); // Apagar relé al iniciar
-    console.log(`Relé inicializado correctamente en GPIO ${GPIO_PIN} usando pigpio`);
+    // Usar RPi.GPIO en lugar de pigpio
+    GPIO = require('rpi-gpio');
+    
+    // Configurar el pin GPIO
+    GPIO.setup(GPIO_PIN, GPIO.DIR_OUT, (err: Error) => {
+      if (err) throw err;
+      console.log(`GPIO ${GPIO_PIN} configurado como salida`);
+      
+      // Asegurar que el relé esté apagado al inicio
+      GPIO.write(GPIO_PIN, RELAY_OFF, (writeErr: Error) => {
+        if (writeErr) console.error(`Error al inicializar relé:`, writeErr);
+        else console.log(`Relé inicializado correctamente en GPIO ${GPIO_PIN} (apagado)`);
+      });
+    });
+    
+    relay = {
+      output: (value: number) => {
+        return new Promise((resolve, reject) => {
+          GPIO.write(GPIO_PIN, value, (err: Error) => {
+            if (err) {
+              console.error(`Error al cambiar estado del relé:`, err);
+              reject(err);
+              return false;
+            }
+            resolve(true);
+            return true;
+          });
+        });
+      },
+      cleanup: () => GPIO.destroy()
+    };
   }
 } catch (error) {
   console.error(`Error al inicializar el relé en GPIO ${GPIO_PIN}:`, error);
@@ -47,7 +67,7 @@ try {
 
 export function turnOnRelay(): boolean {
   try {
-    relay.digitalWrite(RELAY_ON);
+    relay.output(RELAY_ON);
     relayState = true;
     if (!simulationMode) {
       console.log("Relé encendido");
@@ -61,7 +81,7 @@ export function turnOnRelay(): boolean {
 
 export function turnOffRelay(): boolean {
   try {
-    relay.digitalWrite(RELAY_OFF);
+    relay.output(RELAY_OFF);
     relayState = false;
     if (!simulationMode) {
       console.log("Relé apagado");
@@ -82,9 +102,9 @@ export function toggleRelay(): boolean {
 }
 
 process.on('SIGINT', () => {
-  relay.digitalWrite(RELAY_OFF);
-  if (!simulationMode && relay.unexport) {
-    relay.unexport();
+  relay.output(RELAY_OFF);
+  if (!simulationMode && relay.cleanup) {
+    relay.cleanup();
   }
   console.log("\nGPIO liberado, saliendo...");
   process.exit(0);
@@ -92,9 +112,9 @@ process.on('SIGINT', () => {
 
 ['SIGTERM', 'SIGHUP'].forEach(signal => {
   process.on(signal, () => {
-    relay.digitalWrite(RELAY_OFF);
-    if (!simulationMode && relay.unexport) {
-      relay.unexport();
+    relay.output(RELAY_OFF);
+    if (!simulationMode && relay.cleanup) {
+      relay.cleanup();
     }
     console.log(`\nGPIO liberado por señal ${signal}, saliendo...`);
     process.exit(0);
