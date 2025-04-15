@@ -18,14 +18,23 @@ jobs:
       - name: Install backend dependencies
         run: |
           set -e
-          cd backend/src
+          cd backend
           npm ci
 
       - name: Build backend
         run: |
           set -e
-          cd backend/src
+          cd backend
           npm run build
+
+      - name: Install pigpio if needed
+        run: |
+          if ! npm list -g pigpio &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y pigpio
+            sudo npm install -g pigpio
+          fi
+          echo "pigpio checked/installed"
 
       - name: Configure GPIO permissions
         run: |
@@ -41,7 +50,7 @@ jobs:
 
       - name: Restart backend with PM2
         run: |
-          cd backend/src
+          cd backend
           # Detener la aplicación anterior si está en ejecución
           sudo pm2 stop thermostat-backend || true
           # Iniciar o reiniciar con la configuración actualizada
