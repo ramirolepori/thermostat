@@ -27,9 +27,24 @@ jobs:
           cd backend/src
           npm run build
 
+      - name: Configure GPIO permissions
+        run: |
+          # Verificar si el directorio GPIO existe
+          if [ -d "/sys/class/gpio" ]; then
+            # Asegurar que el usuario tiene los permisos adecuados
+            sudo chown -R $USER:$USER /sys/class/gpio || true
+            sudo chmod -R 777 /sys/class/gpio || true
+            echo "Permisos GPIO configurados correctamente"
+          else
+            echo "Directorio GPIO no encontrado - usando modo simulación"
+          fi
+
       - name: Restart backend with PM2
         run: |
           cd backend/src
+          # Detener la aplicación anterior si está en ejecución
+          pm2 stop thermostat-backend || true
+          # Iniciar o reiniciar con la configuración actualizada
           pm2 startOrRestart ecosystem.config.js
 
       - name: Install frontend dependencies
