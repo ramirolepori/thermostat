@@ -41,7 +41,6 @@ const Thermostat: React.FC = () => {
   const [targetTemp, setTargetTemp] = useState<number>(22);
   const [isHeating, setIsHeating] = useState<boolean>(false);
   const [isPowerOn, setIsPowerOn] = useState<boolean>(false);
-  const [isPowerLoading, setIsPowerLoading] = useState<boolean>(false);
   const [scenes, setScenes] = useState<Scene[]>(() => {
     // Cargar escenas desde localStorage si existen
     try {
@@ -294,13 +293,10 @@ const Thermostat: React.FC = () => {
 
   // Alterna el estado de encendido/apagado del termostato
   const togglePower = useCallback(async () => {
-    setIsPowerLoading(true);
     try {
       const newPowerState = !isPowerOn;
-      
       // Actualizar UI inmediatamente para mejor experiencia
       setIsPowerOn(newPowerState);
-      
       let success;
       if (newPowerState) {
         // Intentar iniciar el termostato con la temperatura objetivo actual
@@ -309,16 +305,13 @@ const Thermostat: React.FC = () => {
         // Detener el termostato
         success = await stopThermostat();
       }
-      
       if (!success) {
         throw new Error(`Error al ${newPowerState ? 'iniciar' : 'detener'} el termostato`);
       }
-      
       // Actualizar datos si se enciende el termostato
       if (newPowerState) {
         await updateThermostatData(true);
       }
-      
       // Limpiar error si la operación tuvo éxito
       setError(null);
     } catch (error) {
@@ -326,8 +319,6 @@ const Thermostat: React.FC = () => {
       setError(`Error al ${isPowerOn ? 'apagar' : 'encender'} el termostato`);
       // Revertir el cambio de estado en caso de error
       setIsPowerOn(!isPowerOn);
-    } finally {
-      setIsPowerLoading(false);
     }
   }, [isPowerOn, targetTemp, updateThermostatData]);
 
@@ -543,27 +534,14 @@ const Thermostat: React.FC = () => {
             className={`power-button ${isPowerOn ? "power-on" : "power-off"}`}
             onClick={togglePower}
             aria-label="Power"
-            disabled={isPowerLoading}
           >
-            {isPowerLoading ? (
-              <span className="loading-spinner" aria-label="Cargando">
-                <svg width="24" height="24" viewBox="0 0 24 24">
-                  <circle className="spinner-path" cx="12" cy="12" r="10" fill="none" stroke="#fff" strokeWidth="4" strokeDasharray="60" strokeDashoffset="20"/>
-                </svg>
-              </span>
-            ) : (
-              <Power size={24} />
-            )}
+            <Power size={24} />
           </button>
-
-          {/* Deshabilitar controles mientras carga el power */}
-          <div style={{ pointerEvents: isPowerLoading ? 'none' : undefined, opacity: isPowerLoading ? 0.5 : 1 }}>
-            {TemperatureControls}
-          </div>
+          {TemperatureControls}
         </div>
 
         {/* Sección de escenas */}
-        <div className="scenes-section" style={{ pointerEvents: isPowerLoading ? 'none' : undefined, opacity: isPowerLoading ? 0.5 : 1 }}>
+        <div className="scenes-section">
           <h2>Scenes</h2>
           <SceneSelector
             scenes={scenes}
