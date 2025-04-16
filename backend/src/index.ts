@@ -8,7 +8,8 @@ import { cpus, networkInterfaces } from 'os';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
-const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces de red
+// Cambiar HOST para que solo escuche en localhost, evitando acceso directo desde fuera
+const HOST = '127.0.0.1'; // Solo escuchar en localhost
 const isProd = process.env.NODE_ENV === 'production';
 
 // Función para obtener la IP del dispositivo
@@ -97,10 +98,11 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// Iniciar el servidor
+// Iniciar el servidor solo en localhost
 app.listen(PORT, HOST, () => {
   const localIP = getLocalIP();
-  console.log(`✅ Backend corriendo en http://${HOST === '0.0.0.0' ? localIP : HOST}:${PORT} (${isProd ? 'producción' : 'desarrollo'})`);
+  console.log(`✅ Backend corriendo en http://${HOST}:${PORT} (${isProd ? 'producción' : 'desarrollo'})`);
+  console.log(`✅ Backend accesible solo a través de Nginx en http://${localIP}/api`);
   console.log(`✅ Servidor optimizado para ${cpus().length} CPU(s)`);
   
   // Iniciar el termostato con la configuración predeterminada
