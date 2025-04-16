@@ -30,11 +30,13 @@ export default defineConfig(({ command }) => {
     // Configuración del servidor de desarrollo
     server: {
       proxy: {
-        '/api': {
+        // Redirigir las rutas de API específicas
+        '/health': 'http://localhost:3001',
+        '/temperature': 'http://localhost:3001',
+        '/status': 'http://localhost:3001',
+        '/target-temperature': 'http://localhost:3001',
+        '/thermostat': {
           target: 'http://localhost:3001',
-          changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path.replace(/^\/api/, ''),
           // Solo logear en modo desarrollo cuando sea necesario
           configure: (proxy, _options) => {
             if (process.env.DEBUG) {
