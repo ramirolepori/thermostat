@@ -60,7 +60,41 @@ print_message "Compilando el backend..."
 npm run build
 check_error "Error al compilar el backend"
 
-# 5. Configurar los permisos para GPIO y 1-Wire (en cada reinicio por seguridad)
+# 5. Verificar y configurar el daemon de pigpio
+print_message "Verificando estado del daemon pigpio..."
+
+# Verificar si el daemon ya está en ejecución
+DAEMON_RUNNING=0
+if pgrep pigpiod > /dev/null; then
+    print_message "Daemon pigpio ya está en ejecución"
+    # Verificar cuántas instancias están corriendo
+    DAEMON_COUNT=$(pgrep pigpiod | wc -l)
+    if [ $DAEMON_COUNT -gt 1 ]; then
+        print_warning "Se detectaron $DAEMON_COUNT instancias del daemon pigpio - deteniendo todas las instancias"
+        sudo killall pigpiod
+        sleep 2
+        DAEMON_RUNNING=0
+    else
+        DAEMON_RUNNING=1
+    fi
+fi
+
+# Solo iniciar el daemon si no está corriendo ya
+if [ $DAEMON_RUNNING -eq 0 ]; then
+    print_message "Iniciando daemon pigpio..."
+    sudo pigpiod -l -m -n 200
+    sleep 2
+    
+    # Verificar que el daemon se inició correctamente
+    if pgrep pigpiod > /dev/null; then
+        print_message "Daemon pigpio iniciado correctamente"
+    else
+        print_error "El daemon pigpio no pudo iniciarse"
+        exit 1
+    fi
+fi
+
+# 6. Configurar los permisos para GPIO y 1-Wire (en cada reinicio por seguridad)
 print_message "Verificando permisos para GPIO y 1-Wire..."
 
 # Configurar permisos para GPIO
@@ -69,7 +103,7 @@ if [ -d "/sys/class/gpio" ]; then
     sudo chmod -R 777 /sys/class/gpio || true
     print_message "Permisos GPIO configurados correctamente"
 else
-    print_warning "Directorio GPIO no encontrado - usando modo simulación"
+    print_warning "Directorio GPIO no encontrado"
 fi
 
 # Configurar permisos para 1-Wire (sensores de temperatura)
@@ -78,10 +112,10 @@ if [ -d "/sys/bus/w1/devices" ]; then
     sudo chmod -R 777 /sys/bus/w1/devices || true
     print_message "Permisos 1-Wire configurados correctamente"
 else
-    print_warning "Directorio 1-Wire no encontrado - usando modo simulación"
+    print_warning "Directorio 1-Wire no encontrado"
 fi
 
-# 6. Reiniciar el backend con PM2
+# 7. Reiniciar el backend con PM2
 print_message "Reiniciando backend con PM2..."
 cd "$PROJECT_DIR/backend"
 
@@ -97,7 +131,7 @@ check_error "Error al iniciar el backend con PM2"
 sudo pm2 save
 check_error "Error al guardar configuración de PM2"
 
-# 7. Verificar que todo está funcionando
+# 8. Verificar que todo está funcionando
 print_message "Verificando estado del servicio..."
 if sudo pm2 status | grep -q "thermostat-backend\|thermost"; then
     print_message "El servicio de backend está activo"

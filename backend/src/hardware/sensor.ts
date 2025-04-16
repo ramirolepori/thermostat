@@ -38,6 +38,9 @@ function getSensorPath(): string | null {
 export function getTemperature(): number {
   try {
     const sensorPath = getSensorPath();
+    if (!sensorPath) {
+      throw new Error("Sensor path is null");
+    }
     const data = readFileSync(sensorPath, 'utf-8');
     const match = data.match(/t=(\d+)/);
     

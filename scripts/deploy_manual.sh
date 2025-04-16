@@ -79,21 +79,35 @@ if ! dpkg -l | grep -q pigpio; then
     check_error "Error al instalar pigpio"
 fi
 
-# Detener cualquier instancia existente del daemon de pigpio
-sudo killall pigpiod || true
-
-# Iniciar el daemon de pigpio con permisos adecuados
-sudo pigpiod -l -m -n 200
-
-# Esperar a que el daemon inicie completamente
-sleep 2
-
-# Comprobar que el daemon está funcionando
+# Verificar si el daemon ya está en ejecución
+DAEMON_RUNNING=0
 if pgrep pigpiod > /dev/null; then
-    print_message "Daemon pigpio iniciado correctamente"
-else
-    print_error "El daemon pigpio no pudo iniciarse"
-    exit 1
+    print_message "Daemon pigpio ya está en ejecución"
+    # Verificar cuántas instancias están corriendo
+    DAEMON_COUNT=$(pgrep pigpiod | wc -l)
+    if [ $DAEMON_COUNT -gt 1 ]; then
+        print_warning "Se detectaron $DAEMON_COUNT instancias del daemon pigpio - deteniendo todas las instancias"
+        sudo killall pigpiod
+        sleep 2
+        DAEMON_RUNNING=0
+    else
+        DAEMON_RUNNING=1
+    fi
+fi
+
+# Solo iniciar el daemon si no está corriendo ya
+if [ $DAEMON_RUNNING -eq 0 ]; then
+    print_message "Iniciando daemon pigpio..."
+    sudo pigpiod -l -m -n 200
+    sleep 2
+    
+    # Verificar que el daemon se inició correctamente
+    if pgrep pigpiod > /dev/null; then
+        print_message "Daemon pigpio iniciado correctamente"
+    else
+        print_error "El daemon pigpio no pudo iniciarse"
+        exit 1
+    fi
 fi
 
 # Instalar pigpio para el usuario root (usado por sudo pm2)
@@ -101,11 +115,6 @@ if ! sudo npm list -g pigpio &> /dev/null; then
     sudo npm install -g pigpio
     check_error "Error al instalar pigpio globalmente"
 fi
-
-# También instalar localmente en la aplicación
-cd "$PROJECT_DIR/backend"
-sudo npm install --no-save pigpio
-check_error "Error al instalar pigpio localmente"
 
 # 7. Configurar los permisos para GPIO y 1-Wire
 print_message "Configurando permisos para GPIO y 1-Wire..."
@@ -116,7 +125,7 @@ if [ -d "/sys/class/gpio" ]; then
     sudo chmod -R 777 /sys/class/gpio || true
     print_message "Permisos GPIO configurados correctamente"
 else
-    print_warning "Directorio GPIO no encontrado - usando modo simulación"
+    print_warning "Directorio GPIO no encontrado"
 fi
 
 # Configurar permisos para 1-Wire (sensores de temperatura)
@@ -125,16 +134,10 @@ if [ -d "/sys/bus/w1/devices" ]; then
     sudo chmod -R 777 /sys/bus/w1/devices || true
     print_message "Permisos 1-Wire configurados correctamente"
 else
-    print_warning "Directorio 1-Wire no encontrado - usando modo simulación"
+    print_warning "Directorio 1-Wire no encontrado"
 fi
 
-# 8. Restablecer la dependencia de rpi-gpio (según las modificaciones previas)
-print_message "Instalando la dependencia rpi-gpio..."
-cd "$PROJECT_DIR/backend"
-npm install --save rpi-gpio
-check_error "Error al instalar rpi-gpio"
-
-# 9. Reiniciar el backend con PM2
+# 8. Reiniciar el backend con PM2
 print_message "Reiniciando backend con PM2..."
 cd "$PROJECT_DIR/backend"
 
@@ -150,7 +153,7 @@ check_error "Error al iniciar el backend con PM2"
 sudo pm2 save
 check_error "Error al guardar configuración de PM2"
 
-# 10. Instalar dependencias del frontend
+# 9. Instalar dependencias del frontend
 print_message "Instalando dependencias del frontend..."
 cd "$PROJECT_DIR/frontend"
 check_error "Error al acceder al directorio frontend"
@@ -158,12 +161,12 @@ check_error "Error al acceder al directorio frontend"
 npm ci
 check_error "Error al instalar dependencias del frontend"
 
-# 11. Compilar el frontend
+# 10. Compilar el frontend
 print_message "Compilando el frontend..."
 npm run build
 check_error "Error al compilar el frontend"
 
-# 12. Desplegar el frontend a la carpeta de Nginx
+# 11. Desplegar el frontend a la carpeta de Nginx
 print_message "Desplegando frontend en Nginx..."
 sudo rm -rf /var/www/thermostat-frontend
 sudo cp -r "$PROJECT_DIR/frontend/dist" /var/www/thermostat-frontend
@@ -173,7 +176,7 @@ check_error "Error al copiar archivos del frontend"
 sudo systemctl restart nginx
 check_error "Error al reiniciar Nginx"
 
-# 13. Verificar que todo está funcionando
+# 12. Verificar que todo está funcionando
 print_message "Verificando estado del servicio..."
 if sudo pm2 status | grep -q "thermostat-backend\|thermost"; then
     print_message "El servicio de backend está activo"
@@ -187,7 +190,7 @@ else
     print_warning "El API del backend no responde correctamente"
 fi
 
-# 14. Mostrar información útil al final
+# 13. Mostrar información útil al final
 BACKEND_IP=$(hostname -I | awk '{print $1}')
 print_message "Despliegue completado exitosamente!"
 echo -e "${GREEN}-------------------------------------------------------------${NC}"
