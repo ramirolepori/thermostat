@@ -201,7 +201,6 @@ const Thermostat: React.FC = () => {
     const fetchInitialData = async () => {
       try {
         setLoading(true);
-        setIsPowerOn(false);
         setError(null);
 
         // Verificar conectividad del backend
