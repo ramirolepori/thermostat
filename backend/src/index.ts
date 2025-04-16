@@ -80,7 +80,7 @@ app.use((req, res, next) => {
 });
 
 // Montar las rutas
-app.use('/api', routes);
+app.use(routes);
 
 // Manejador global de errores
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

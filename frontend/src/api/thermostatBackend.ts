@@ -30,7 +30,7 @@ interface HealthResponse {
 }
 
 // Configuración de API base
-const API_BASE_URL = '/api';
+const API_BASE_URL = '';
 let isBackendAvailable = true;
 let backendCheckInProgress = false;
 let lastBackendCheckTime = 0;
