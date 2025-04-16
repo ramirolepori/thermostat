@@ -85,6 +85,11 @@ const validateHysteresis = (req: HysteresisRequest, res: Response, next: NextFun
   next();
 };
 
+// Ruta de prueba para comprobar que el servidor está funcionando
+router.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
 // Ruta de comprobación de estado del sistema
 router.get('/health', (_req: Request, res: Response) => {
   try {
