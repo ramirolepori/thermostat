@@ -8,18 +8,51 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
+    
+    # Agregar configuración de concurrencia para evitar ejecuciones simultáneas
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
+      # Pre-checkout cleanup para evitar problemas de permisos
+      - name: Pre-checkout cleanup
+        run: |
+          echo "Checking for node_modules directories with permission issues..."
+          if [ -d "/home/ramirolepori/actions-runner/_work/thermostat/thermostat" ]; then
+            sudo find /home/ramirolepori/actions-runner/_work/thermostat/thermostat -name "node_modules" -type d -exec sudo chmod -R 777 {} \; 2>/dev/null || true
+            echo "✅ Permisos corregidos para directorios node_modules existentes"
+          fi
+
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # opcional, si necesitás todo el historial para alguna razón
+          fetch-depth: 0
+          token: ${{ github.token }}
+          persist-credentials: true
+          clean: true
+          # Activar checkout seguro - útil en runners auto-hospedados
+          safe-checkout: true
+      
+      # Post-checkout validation
+      - name: Validate checkout
+        id: validate
+        run: |
+          if [ -d "backend" ] && [ -d "frontend" ]; then
+            echo "✅ Checkout correcto - directorios backend y frontend encontrados"
+            echo "checkout_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Error en checkout - no se encontraron los directorios esperados"
+            echo "checkout_success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Install backend dependencies
+        if: steps.validate.outputs.checkout_success == 'true'
         run: |
           set -e
           cd backend
-          sudo npm ci
+          sudo npm ci --no-optional
 
       - name: Build backend
         run: |

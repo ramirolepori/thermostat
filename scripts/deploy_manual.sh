@@ -60,7 +60,7 @@ print_message "Instalando dependencias del backend..."
 cd "$PROJECT_DIR/backend"
 check_error "Error al acceder al directorio backend"
 
-npm ci
+sudo npm ci
 check_error "Error al instalar dependencias del backend"
 
 # 5. Compilar el backend
