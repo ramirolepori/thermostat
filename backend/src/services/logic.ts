@@ -25,7 +25,7 @@ interface ThermostatState {
 const DEFAULT_CONFIG: ThermostatConfig = {
   targetTemperature: 22, // 22°C por defecto
   hysteresis: 1.5, // Diferencial de 1.5°C
-  checkIntervalMs: 5000, // Revisar cada 5 segundos
+  checkIntervalMs: 1000, // Revisar cada 1 segundo (antes 5 segundos)
   maxConsecutiveErrors: 5, // Máximo de errores consecutivos antes de apagar el sistema
 };
 
