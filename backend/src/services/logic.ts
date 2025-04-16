@@ -209,19 +209,27 @@ export function getHysteresis(): number {
  * Obtiene el estado actual del termostato
  */
 export function getThermostatState(): ThermostatState {
-  // Actualizar manualmente los valores antes de devolver el estado
-  const temperature = getTemperature();
-  if (!isNaN(temperature)) {
-    thermostatState.currentTemperature = temperature;
+  try {
+    // Intentar obtener la temperatura actual
+    try {
+      const temperature = getTemperature();
+      thermostatState.currentTemperature = temperature;
+    } catch (error) {
+      console.error("Error al leer la temperatura:", error);
+      // No actualizamos la temperatura en caso de error, mantenemos el último valor válido
+    }
+    
+    thermostatState.isHeating = getRelayState();
+    thermostatState.targetTemperature = thermostatConfig.targetTemperature;
+    thermostatState.hysteresis = thermostatConfig.hysteresis;
+    thermostatState.lastUpdated = new Date();
+    
+    // Devolver una copia del objeto para evitar modificaciones externas
+    return { ...thermostatState };
+  } catch (error) {
+    console.error("Error al obtener estado del termostato:", error);
+    return { ...thermostatState };
   }
-  
-  thermostatState.isHeating = getRelayState();
-  thermostatState.targetTemperature = thermostatConfig.targetTemperature;
-  thermostatState.hysteresis = thermostatConfig.hysteresis;
-  thermostatState.lastUpdated = new Date();
-  
-  // Devolver una copia del objeto para evitar modificaciones externas
-  return { ...thermostatState };
 }
 
 /**
@@ -287,19 +295,13 @@ function notifyCriticalError(errorMessage: string): void {
  */
 function updateCurrentState(): boolean {
   try {
+    // Intentar leer la temperatura del sensor DS18B20
     const temperature = getTemperature();
-
-    if (!isNaN(temperature)) {
-      thermostatState.currentTemperature = temperature;
-      thermostatState.isHeating = getRelayState();
-      thermostatState.lastUpdated = new Date();
-      return true;
-    } else {
-      const errorMsg = "Error: No se pudo leer la temperatura, valor NaN recibido";
-      console.error(errorMsg);
-      thermostatState.lastError = errorMsg;
-      return false;
-    }
+    
+    thermostatState.currentTemperature = temperature;
+    thermostatState.isHeating = getRelayState();
+    thermostatState.lastUpdated = new Date();
+    return true;
   } catch (error) {
     const errorMsg = `Error al actualizar estado: ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMsg);
