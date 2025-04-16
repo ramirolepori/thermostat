@@ -58,6 +58,8 @@ jobs:
         run: |
           set -e
           cd backend
+          sudo pm2 stop thermostat-backend
+          sudo rm -rf dist
           npm run build
           echo "✅ Backend construido correctamente"
 
