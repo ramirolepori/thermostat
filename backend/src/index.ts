@@ -79,6 +79,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware para rechazar rutas sin el prefijo /api para APIs
+app.use(['/health', '/temperature', '/status', '/target-temperature', '/thermostat/*'], (req, res) => {
+  return res.status(404).json({
+    error: `Endpoint no encontrado. Usa el prefijo '/api' para acceder a los endpoints de la API: /api${req.url}`
+  });
+});
+
 // Montar las rutas
 app.use('/api', routes);
 
