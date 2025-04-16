@@ -70,6 +70,7 @@ const Thermostat: React.FC = () => {
   const [newSceneName, setNewSceneName] = useState("");
   const [isCreatingScene, setIsCreatingScene] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isTogglingPower, setIsTogglingPower] = useState<boolean>(false); // Nuevo estado
   const [error, setError] = useState<string | null>(null);
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [retryCount, setRetryCount] = useState<number>(0);
@@ -331,16 +332,14 @@ const Thermostat: React.FC = () => {
 
   // Alterna el estado de encendido/apagado del termostato
   const togglePower = useCallback(async () => {
+    setIsTogglingPower(true); // Activar spinner solo para el botón
     try {
       const newPowerState = !isPowerOn;
-      // Actualizar UI inmediatamente para mejor experiencia
       setIsPowerOn(newPowerState);
       let success;
       if (newPowerState) {
-        // Intentar iniciar el termostato con la temperatura objetivo actual
         success = await startThermostat(targetTemp);
       } else {
-        // Detener el termostato
         success = await stopThermostat();
       }
       if (!success) {
@@ -348,17 +347,16 @@ const Thermostat: React.FC = () => {
           `Error al ${newPowerState ? "iniciar" : "detener"} el termostato`
         );
       }
-      // Actualizar datos si se enciende el termostato
       if (newPowerState) {
         await updateThermostatData(true);
       }
-      // Limpiar error si la operación tuvo éxito
       setError(null);
     } catch (error) {
       console.error("Error toggling power:", error);
       setError(`Error al ${isPowerOn ? "apagar" : "encender"} el termostato`);
-      // Revertir el cambio de estado en caso de error
       setIsPowerOn(!isPowerOn);
+    } finally {
+      setIsTogglingPower(false); // Desactivar spinner
     }
   }, [isPowerOn, targetTemp, updateThermostatData]);
 
@@ -591,6 +589,13 @@ const Thermostat: React.FC = () => {
             <button
               className={`power-button ${isPowerOn ? "power-on" : "power-off"}`}
               aria-label="Loading..."
+            >
+              <LoaderCircle className="spinner" size={24} />
+            </button>
+          ) : isTogglingPower ? (
+            <button
+              className={`power-button ${isPowerOn ? "power-on" : "power-off"}`}
+              aria-label="Toggling power..."
             >
               <LoaderCircle className="spinner" size={24} />
             </button>
