@@ -158,6 +158,7 @@ export function setTargetTemperature(temperature: number): boolean {
     }
     
     thermostatConfig.targetTemperature = temperature;
+    thermostatState.targetTemperature = temperature; // Sincronizar también el estado inmediatamente
     console.log(`Temperatura objetivo actualizada a: ${temperature}°C`);
 
     // Si el termostato está ejecutándose, actualizar estado y verificar calefacción
@@ -301,6 +302,8 @@ function updateCurrentState(): boolean {
     thermostatState.currentTemperature = temperature;
     thermostatState.isHeating = getRelayState();
     thermostatState.lastUpdated = new Date();
+    // No modificar thermostatState.targetTemperature aquí
+    // No modificar thermostatState.hysteresis aquí
     return true;
   } catch (error) {
     const errorMsg = `Error al actualizar estado: ${error instanceof Error ? error.message : String(error)}`;
