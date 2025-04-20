@@ -2,8 +2,8 @@ import { Gpio } from 'pigpio';
 
 // Configuración del pin GPIO para el relé
 const GPIO_PIN = 17;     // GPIO 17 (pin 11) como salida
-const RELAY_ON = 1;      // Valor para activar el relé 
-const RELAY_OFF = 0;     // Valor para desactivar el relé
+const RELAY_ON = 0;      // Valor para activar el relé (activo bajo)
+const RELAY_OFF = 1;     // Valor para desactivar el relé (activo bajo)
 
 // Estado del relé
 let relayState = false;
