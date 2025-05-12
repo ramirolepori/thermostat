@@ -67,8 +67,6 @@ const Thermostat: React.FC = () => {
       return initialScenes;
     }
   });
-  const [newSceneName, setNewSceneName] = useState("");
-  const [isCreatingScene, setIsCreatingScene] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [isTogglingPower, setIsTogglingPower] = useState<boolean>(false); // Nuevo estado
   const [error, setError] = useState<string | null>(null);
@@ -399,38 +397,29 @@ const Thermostat: React.FC = () => {
     );
   }, []);
 
-  // Guarda una nueva escena
-  const saveNewScene = useCallback(() => {
-    if (newSceneName.trim() === "") {
-      setError("El nombre de la escena no puede estar vacío");
-      return;
-    }
-
-    // Validar si ya existe una escena con el mismo nombre
-    if (
-      scenes.some(
-        (scene) =>
-          scene.name.toLowerCase() === newSceneName.trim().toLowerCase()
-      )
-    ) {
-      setError("Ya existe una escena con este nombre");
-      return;
-    }
-
-    // Crear nueva escena con la temperatura actual
-    const newScene = {
-      id: Date.now(),
-      name: newSceneName.trim(),
-      temperature: targetTemp,
-      active: false,
-    };
-
-    // Actualizar lista de escenas
-    setScenes((prevScenes) => [...prevScenes, newScene]);
-    setNewSceneName("");
-    setIsCreatingScene(false);
-    setError(null);
-  }, [newSceneName, targetTemp, scenes]);
+  // Nueva función para agregar escena desde SceneSelector
+  const handleAddScene = useCallback(
+    (name: string, temperature: number) => {
+      // Validar si ya existe una escena con el mismo nombre
+      if (
+        scenes.some(
+          (scene) => scene.name.toLowerCase() === name.trim().toLowerCase()
+        )
+      ) {
+        setError("Ya existe una escena con este nombre");
+        return;
+      }
+      const newScene = {
+        id: Date.now(),
+        name: name.trim(),
+        temperature,
+        active: false,
+      };
+      setScenes((prevScenes) => [...prevScenes, newScene]);
+      setError(null);
+    },
+    [scenes]
+  );
 
   // Componente de error memoizado para evitar re-renderizados innecesarios
   const ErrorBanner = useMemo(() => {
@@ -505,47 +494,6 @@ const Thermostat: React.FC = () => {
     [currentTemp, targetTemp, isHeating, isPowerOn, decreaseTemp, increaseTemp]
   );
 
-  // Componente de creación de escena optimizado
-  const SceneCreator = useMemo(() => {
-    if (!isCreatingScene) {
-      return (
-        <button
-          className="add-scene-button"
-          onClick={() => setIsCreatingScene(true)}
-          disabled={!isPowerOn}
-        >
-          Add New Scene
-        </button>
-      );
-    }
-
-    return (
-      <div className="new-scene-form">
-        <input
-          type="text"
-          value={newSceneName}
-          onChange={(e) => setNewSceneName(e.target.value)}
-          placeholder="Scene name"
-          className="scene-input"
-        />
-        <div className="scene-form-buttons">
-          <button className="save-button" onClick={saveNewScene}>
-            <Save size={16} /> Save
-          </button>
-          <button
-            className="cancel-button"
-            onClick={() => {
-              setIsCreatingScene(false);
-              setError(null);
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }, [isCreatingScene, newSceneName, isPowerOn, saveNewScene]);
-
   // Renderizar pantalla de error de conexión
   if (!backendConnected) {
     return (
@@ -617,10 +565,9 @@ const Thermostat: React.FC = () => {
             scenes={scenes}
             onActivate={activateScene}
             onDelete={deleteScene}
+            onAdd={handleAddScene}
             disabled={!isPowerOn}
           />
-
-          {SceneCreator}
         </div>
       </div>
     </div>

@@ -13,7 +13,7 @@ interface SceneSelectorProps {
   scenes: Scene[]
   onActivate: (id: number) => void
   onDelete: (id: number) => void
-  onAdd: (name: string, temperature: number) => void // <-- nueva prop
+  onAdd: (name: string, temperature: number) => void
   disabled: boolean
 }
 
@@ -22,9 +22,11 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
   const [contextMenu, setContextMenu] = useState<{ id: number; x: number; y: number } | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  // Lógica para crear escena
   const [showNewScene, setShowNewScene] = useState(false)
   const [newSceneName, setNewSceneName] = useState("")
   const [newSceneTemp, setNewSceneTemp] = useState(22)
+  const [formError, setFormError] = useState<string | null>(null)
 
   // Detect if we're on a mobile device - optimizado con useCallback
   useEffect(() => {
@@ -109,14 +111,22 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
     }
   }, [longPressTimer])
 
-  // Handler para agregar nueva escena
+  // Handler para agregar nueva escena con validación de nombre único
   const handleAddScene = useCallback(() => {
-    if (!newSceneName.trim()) return;
+    if (!newSceneName.trim()) {
+      setFormError("El nombre de la escena no puede estar vacío");
+      return;
+    }
+    if (scenes.some(scene => scene.name.toLowerCase() === newSceneName.trim().toLowerCase())) {
+      setFormError("Ya existe una escena con este nombre");
+      return;
+    }
     onAdd(newSceneName.trim(), newSceneTemp)
     setShowNewScene(false)
     setNewSceneName("")
     setNewSceneTemp(22)
-  }, [onAdd, newSceneName, newSceneTemp])
+    setFormError(null)
+  }, [onAdd, newSceneName, newSceneTemp, scenes])
 
   // Memoizar la lista de escenas para evitar recálculo
   const scenesList = useMemo(() => (
@@ -176,7 +186,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
               type="text"
               placeholder="Nombre de la escena"
               value={newSceneName}
-              onChange={e => setNewSceneName(e.target.value)}
+              onChange={e => { setNewSceneName(e.target.value); setFormError(null); }}
               disabled={disabled}
               maxLength={32}
               style={{ marginRight: 8 }}
@@ -203,11 +213,12 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
             <button
               className="scene-button"
               style={{ marginLeft: 4 }}
-              onClick={() => setShowNewScene(false)}
+              onClick={() => { setShowNewScene(false); setFormError(null); }}
               disabled={disabled}
             >
               Cancelar
             </button>
+            {formError && <div className="scene-form-error">{formError}</div>}
           </div>
         ) : (
           <button
@@ -220,7 +231,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
         )}
       </div>
     </div>
-  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate, showNewScene, newSceneName, newSceneTemp, handleAddScene])
+  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate, showNewScene, newSceneName, newSceneTemp, handleAddScene, formError])
 
   return scenesList;
 });
