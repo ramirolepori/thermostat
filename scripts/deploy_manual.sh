@@ -12,8 +12,11 @@ while true; do
 
   case $opcion in
     1)
+    # Actualiza el repositorio local con los cambios del remoto
+      cd ../
+      git pull || exit 1
       # Backend
-      cd ../backend || exit 1
+      cd backend || exit 1
       sudo npm ci --no-optional || exit 1
       sudo pm2 stop thermostat-backend || true
       sudo rm -rf dist
@@ -32,7 +35,10 @@ while true; do
       echo "Despliegue de backend y frontend completado."
       ;;
     2)
-      cd ../backend || exit 1
+      # Actualiza el repositorio local con los cambios del remoto
+      cd ../
+      git pull || exit 1
+      cd backend || exit 1
       sudo npm ci --no-optional || exit 1
       sudo pm2 stop thermostat-backend || true
       sudo rm -rf dist
@@ -43,7 +49,10 @@ while true; do
       echo "Despliegue de backend completado."
       ;;
     3)
-      cd ../frontend || exit 1
+      # Actualiza el repositorio local con los cambios del remoto
+      cd ../
+      git pull || exit 1
+      cd frontend || exit 1
       npm ci || exit 1
       npm run build || exit 1
       sudo rm -rf /var/www/thermostat-frontend
