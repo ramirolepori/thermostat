@@ -70,7 +70,6 @@ const Thermostat: React.FC = () => {
 
   // Cargar escenas desde el backend al iniciar y cuando backendConnected cambie a true
   useEffect(() => {
-    if (!backendConnected) return;
     const loadScenes = async () => {
       try {
         const data = await fetchScenes();
@@ -79,7 +78,9 @@ const Thermostat: React.FC = () => {
         setScenes([]);
       }
     };
-    loadScenes();
+    if (backendConnected) {
+      loadScenes();
+    }
   }, [backendConnected]);
 
   // Función para actualizar datos del termostato con evitación de solicitudes duplicadas
