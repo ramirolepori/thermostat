@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -5,6 +8,7 @@ import compression from 'compression';
 import routes from './routes/routes';
 import { startThermostat } from './services/logic';
 import { cpus, networkInterfaces } from 'os';
+import { connectDB } from './database/db';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
@@ -97,6 +101,9 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
     error: isProd ? 'Error interno del servidor' : err.message
   });
 });
+
+// Antes de iniciar el servidor, conectar a la base de datos
+connectDB();
 
 // Iniciar el servidor solo en localhost
 app.listen(PORT, HOST, () => {

@@ -26,23 +26,18 @@ import {
   startThermostat,
   stopThermostat,
   checkBackendConnectivity,
+  fetchScenes,
+  createScene,
+  deleteScene as deleteSceneApi,
 } from "../api/thermostatBackend";
 
 // Definición de la interfaz para las escenas
 interface Scene {
-  id: number; // Identificador único de la escena
+  _id: string; // Usar el id de MongoDB
   name: string; // Nombre de la escena
   temperature: number; // Temperatura objetivo de la escena
   active: boolean; // Indica si la escena está activa
 }
-
-// Escenas iniciales predefinidas
-const initialScenes: Scene[] = [
-  { id: 1, name: "Morning", temperature: 22, active: false },
-  { id: 2, name: "Day", temperature: 24, active: false },
-  { id: 3, name: "Evening", temperature: 23, active: false },
-  { id: 4, name: "Night", temperature: 20, active: false },
-];
 
 // Detectar navegador Safari
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -57,16 +52,7 @@ const Thermostat: React.FC = () => {
   const [targetTemp, setTargetTemp] = useState<number>(22);
   const [isHeating, setIsHeating] = useState<boolean>(false);
   const [isPowerOn, setIsPowerOn] = useState<boolean>(false);
-  const [scenes, setScenes] = useState<Scene[]>(() => {
-    // Cargar escenas desde localStorage si existen
-    try {
-      const savedScenes = localStorage.getItem("thermostatScenes");
-      return savedScenes ? JSON.parse(savedScenes) : initialScenes;
-    } catch (e) {
-      console.warn("Error loading scenes from localStorage", e);
-      return initialScenes;
-    }
-  });
+  const [scenes, setScenes] = useState<Scene[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isTogglingPower, setIsTogglingPower] = useState<boolean>(false); // Nuevo estado
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +68,18 @@ const Thermostat: React.FC = () => {
   // Memoria de los últimos datos para evitar renderizados innecesarios
   const lastDataTimestamp = useRef<number>(0);
 
-  // Guardar escenas en localStorage cuando cambien
+  // Cargar escenas desde el backend al iniciar
   useEffect(() => {
-    try {
-      localStorage.setItem("thermostatScenes", JSON.stringify(scenes));
-    } catch (e) {
-      console.warn("Error saving scenes to localStorage", e);
-    }
-  }, [scenes]);
+    const loadScenes = async () => {
+      try {
+        const data = await fetchScenes();
+        setScenes(data);
+      } catch (e) {
+        setScenes([]);
+      }
+    };
+    loadScenes();
+  }, []);
 
   // Función para actualizar datos del termostato con evitación de solicitudes duplicadas
   const updateThermostatData = useCallback(
@@ -359,14 +349,14 @@ const Thermostat: React.FC = () => {
 
   // Activa una escena seleccionada
   const activateScene = useCallback(
-    async (sceneId: number) => {
-      const selectedScene = scenes.find((scene) => scene.id === sceneId);
+    async (sceneId: string) => {
+      const selectedScene = scenes.find((scene) => scene._id === sceneId);
       if (!selectedScene) return;
 
       // Actualizar UI primero (optimismo UI)
       const updatedScenes = scenes.map((scene) => ({
         ...scene,
-        active: scene.id === sceneId,
+        active: scene._id === sceneId,
       }));
       setScenes(updatedScenes);
 
@@ -391,32 +381,39 @@ const Thermostat: React.FC = () => {
   );
 
   // Elimina una escena de la lista
-  const deleteScene = useCallback((sceneId: number) => {
-    setScenes((prevScenes) =>
-      prevScenes.filter((scene) => scene.id !== sceneId)
-    );
-  }, []);
+  const deleteScene = useCallback(
+    async (sceneId: string) => {
+      try {
+        await deleteSceneApi(sceneId);
+        setScenes((prevScenes) =>
+          prevScenes.filter((scene) => scene._id !== sceneId)
+        );
+      } catch (e: any) {
+        setError(e.message || "Error al eliminar la escena");
+      }
+    },
+    []
+  );
 
   // Nueva función para agregar escena desde SceneSelector
   const handleAddScene = useCallback(
-    (name: string, temperature: number) => {
-      // Validar si ya existe una escena con el mismo nombre
-      if (
-        scenes.some(
-          (scene) => scene.name.toLowerCase() === name.trim().toLowerCase()
-        )
-      ) {
-        setError("Ya existe una escena con este nombre");
-        return;
+    async (name: string, temperature: number) => {
+      try {
+        // Validar si ya existe una escena con el mismo nombre
+        if (
+          scenes.some(
+            (scene) => scene.name.toLowerCase() === name.trim().toLowerCase()
+          )
+        ) {
+          setError("Ya existe una escena con este nombre");
+          return;
+        }
+        const newScene = await createScene(name, temperature, false);
+        setScenes((prev) => [...prev, newScene as Scene]);
+        setError(null);
+      } catch (e: any) {
+        setError(e.message || "Error al crear la escena");
       }
-      const newScene = {
-        id: Date.now(),
-        name: name.trim(),
-        temperature,
-        active: false,
-      };
-      setScenes((prevScenes) => [...prevScenes, newScene]);
-      setError(null);
     },
     [scenes]
   );

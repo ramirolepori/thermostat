@@ -3,23 +3,23 @@ import { Trash2 } from "lucide-react"
 import "../styles/Thermostat.css"
 
 interface Scene {
-  id: number
-  name: string
-  temperature: number
-  active: boolean
+  _id: string; // MongoDB ID
+  name: string;
+  temperature: number;
+  active: boolean;
 }
 
 interface SceneSelectorProps {
-  scenes: Scene[]
-  onActivate: (id: number) => void
-  onDelete: (id: number) => void
-  onAdd: (name: string, temperature: number) => void
-  disabled: boolean
+  scenes: Scene[];
+  onActivate: (id: string) => void;
+  onDelete: (id: string) => void;
+  onAdd: (name: string, temperature: number) => void;
+  disabled: boolean;
 }
 
 // Usar React.memo para evitar renderizados innecesarios
 const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActivate, onDelete, onAdd, disabled }) => {
-  const [contextMenu, setContextMenu] = useState<{ id: number; x: number; y: number } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   // Lógica para crear escena
@@ -73,14 +73,14 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
   }, [contextMenu])
 
   // Handle delete with confirmation - optimizado con useCallback
-  const handleDelete = useCallback((e: React.MouseEvent, sceneId: number) => {
+  const handleDelete = useCallback((e: React.MouseEvent, sceneId: string) => {
     e.stopPropagation() // Prevent activating the scene when clicking delete
     onDelete(sceneId)
     setContextMenu(null)
   }, [onDelete])
 
   // Handle long press for mobile - optimizado con useCallback
-  const handleTouchStart = useCallback((e: React.TouchEvent, sceneId: number) => {
+  const handleTouchStart = useCallback((e: React.TouchEvent, sceneId: string) => {
     if (disabled) return
 
     const timer = window.setTimeout(() => {
@@ -121,11 +121,11 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
       setFormError("Ya existe una escena con este nombre");
       return;
     }
-    onAdd(newSceneName.trim(), newSceneTemp)
-    setShowNewScene(false)
-    setNewSceneName("")
-    setNewSceneTemp(22)
-    setFormError(null)
+    onAdd(newSceneName.trim(), newSceneTemp);
+    setShowNewScene(false);
+    setNewSceneName("");
+    setNewSceneTemp(22);
+    setFormError(null);
   }, [onAdd, newSceneName, newSceneTemp, scenes])
 
   // Memoizar la lista de escenas para evitar recálculo
@@ -133,15 +133,15 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
     <div className="scenes-list">
       {scenes.map((scene) => (
         <div
-          key={scene.id}
+          key={scene._id}
           className="scene-wrapper"
-          onTouchStart={(e) => isMobile && handleTouchStart(e, scene.id)}
+          onTouchStart={(e) => isMobile && handleTouchStart(e, scene._id)}
           onTouchEnd={isMobile ? handleTouchEnd : undefined}
           onTouchMove={isMobile ? handleTouchMove : undefined}
         >
           <button
             className={`scene-button ${scene.active ? "active-scene" : ""}`}
-            onClick={() => !disabled && onActivate(scene.id)}
+            onClick={() => !disabled && onActivate(scene._id)}
             disabled={disabled}
           >
             <span className="scene-name">{scene.name}</span>
@@ -152,7 +152,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
           {!isMobile && (
             <button
               className="delete-scene-button"
-              onClick={(e) => handleDelete(e, scene.id)}
+              onClick={(e) => handleDelete(e, scene._id)}
               disabled={disabled}
               aria-label={`Delete ${scene.name} scene`}
             >
@@ -161,7 +161,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
           )}
 
           {/* Context menu for mobile */}
-          {contextMenu && contextMenu.id === scene.id && (
+          {contextMenu && contextMenu.id === scene._id && (
             <div
               className="context-menu"
               style={{
@@ -170,7 +170,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <button className="context-menu-item delete-option" onClick={(e) => handleDelete(e, scene.id)}>
+              <button className="context-menu-item delete-option" onClick={(e) => handleDelete(e, scene._id)}>
                 <Trash2 size={16} />
                 <span>Delete</span>
               </button>

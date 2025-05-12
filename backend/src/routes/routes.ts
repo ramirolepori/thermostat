@@ -11,6 +11,8 @@ import {
   getLastError,
   resetThermostat
 } from '../services/logic';
+import { SceneModel } from '../database/scene.model';
+import { Types } from 'mongoose';
 
 const router = Router();
 
@@ -366,6 +368,52 @@ router.post('/thermostat/reset', (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error en endpoint /thermostat/reset:', error);
     res.status(500).json({ error: 'Error al reiniciar el termostato' });
+  }
+});
+
+// Obtener todas las escenas
+router.get('/scenes', async (_req, res) => {
+  try {
+    const scenes = await SceneModel.find();
+    res.json(scenes);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener escenas' });
+  }
+});
+
+// Crear una nueva escena
+router.post('/scenes', async (req, res) => {
+  try {
+    const { name, temperature, active } = req.body;
+    if (!name || typeof temperature !== 'number') {
+      return res.status(400).json({ error: 'Nombre y temperatura son requeridos' });
+    }
+    const scene = new SceneModel({ name, temperature, active: !!active });
+    await scene.save();
+    res.status(201).json(scene);
+  } catch (error) {
+    // Corregido: asegurar que error es any para acceder a error.code
+    if ((error as any).code === 11000) {
+      return res.status(409).json({ error: 'Ya existe una escena con ese nombre' });
+    }
+    res.status(500).json({ error: 'Error al crear la escena' });
+  }
+});
+
+// Eliminar una escena por ID
+router.delete('/scenes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    const result = await SceneModel.findByIdAndDelete(id);
+    if (!result) {
+      return res.status(404).json({ error: 'Escena no encontrada' });
+    }
+    res.json({ message: 'Escena eliminada' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar la escena' });
   }
 });
 

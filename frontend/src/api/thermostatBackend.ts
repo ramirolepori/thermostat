@@ -419,3 +419,24 @@ export async function resetThermostat(): Promise<boolean> {
 export async function checkBackendConnectivity(): Promise<boolean> {
   return await checkBackendAvailability();
 }
+
+// --- SCENES API ---
+
+// Obtener todas las escenas
+export async function fetchScenes() {
+  return fetchWithErrorHandling('/scenes', { method: 'GET' }, []);
+}
+
+// Crear una nueva escena
+export async function createScene(name: string, temperature: number, active: boolean = false) {
+  return fetchWithErrorHandling('/scenes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, temperature, active })
+  });
+}
+
+// Eliminar una escena por ID
+export async function deleteScene(id: string) {
+  return fetchWithErrorHandling(`/scenes/${id}`, { method: 'DELETE' });
+}

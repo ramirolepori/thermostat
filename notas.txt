@@ -7,3 +7,9 @@ IP publica: 186.122.226.43
 http://192.168.101.48/
 
 ssh ramirolepori@thermostat.local
+
+
+Mongo DB atlas
+thermostatCluster
+Username: leporiramiro
+Password: qmyBp6cEY6nemQF9
