@@ -13,14 +13,18 @@ interface SceneSelectorProps {
   scenes: Scene[]
   onActivate: (id: number) => void
   onDelete: (id: number) => void
+  onAdd: (name: string, temperature: number) => void // <-- nueva prop
   disabled: boolean
 }
 
 // Usar React.memo para evitar renderizados innecesarios
-const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActivate, onDelete, disabled }) => {
+const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActivate, onDelete, onAdd, disabled }) => {
   const [contextMenu, setContextMenu] = useState<{ id: number; x: number; y: number } | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [showNewScene, setShowNewScene] = useState(false)
+  const [newSceneName, setNewSceneName] = useState("")
+  const [newSceneTemp, setNewSceneTemp] = useState(22)
 
   // Detect if we're on a mobile device - optimizado con useCallback
   useEffect(() => {
@@ -105,6 +109,15 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
     }
   }, [longPressTimer])
 
+  // Handler para agregar nueva escena
+  const handleAddScene = useCallback(() => {
+    if (!newSceneName.trim()) return;
+    onAdd(newSceneName.trim(), newSceneTemp)
+    setShowNewScene(false)
+    setNewSceneName("")
+    setNewSceneTemp(22)
+  }, [onAdd, newSceneName, newSceneTemp])
+
   // Memoizar la lista de escenas para evitar recálculo
   const scenesList = useMemo(() => (
     <div className="scenes-list">
@@ -155,8 +168,59 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
           )}
         </div>
       ))}
+      {/* Botón para agregar nueva escena y formulario */}
+      <div className="scene-wrapper add-scene-wrapper">
+        {showNewScene ? (
+          <div className="add-scene-form">
+            <input
+              type="text"
+              placeholder="Nombre de la escena"
+              value={newSceneName}
+              onChange={e => setNewSceneName(e.target.value)}
+              disabled={disabled}
+              maxLength={32}
+              style={{ marginRight: 8 }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', marginRight: 8 }}>
+              <input
+                type="range"
+                min={10}
+                max={35}
+                value={newSceneTemp}
+                onChange={e => setNewSceneTemp(Number(e.target.value))}
+                disabled={disabled}
+                style={{ marginRight: 8 }}
+              />
+              <span>{newSceneTemp}°C</span>
+            </div>
+            <button
+              className="scene-button"
+              onClick={handleAddScene}
+              disabled={disabled || !newSceneName.trim()}
+            >
+              Guardar
+            </button>
+            <button
+              className="scene-button"
+              style={{ marginLeft: 4 }}
+              onClick={() => setShowNewScene(false)}
+              disabled={disabled}
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button
+            className="scene-button add-scene-btn"
+            onClick={() => setShowNewScene(true)}
+            disabled={disabled}
+          >
+            + Nueva escena
+          </button>
+        )}
+      </div>
     </div>
-  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate])
+  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate, showNewScene, newSceneName, newSceneTemp, handleAddScene])
 
   return scenesList;
 });
