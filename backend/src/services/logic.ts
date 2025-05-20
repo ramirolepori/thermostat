@@ -49,6 +49,24 @@ let lastControlAction = Date.now(); // Rastrear la última vez que se tomó una 
 type ErrorHandler = (error: string) => void;
 const errorHandlers: ErrorHandler[] = [];
 
+// --- MODIFICACIÓN: Manejo de errores consecutivos de sensor ---
+const MAX_SENSOR_ERRORS = 20; // Puedes ajustar este valor
+let consecutiveSensorErrors = 0;
+
+function handleSensorError(error: Error) {
+  consecutiveSensorErrors++;
+  thermostatState.lastError = error.message;
+  console.error(`[SENSOR] Error consecutivo #${consecutiveSensorErrors}: ${error.message}`);
+  if (consecutiveSensorErrors >= MAX_SENSOR_ERRORS) {
+    console.error(`[SENSOR] Se alcanzó el máximo de errores consecutivos (${MAX_SENSOR_ERRORS}). El termostato seguirá intentando, pero no se reiniciará el backend.`);
+    // Aquí podrías agregar lógica para pausar el control, enviar alerta, etc.
+  }
+}
+
+function resetSensorErrorCounter() {
+  consecutiveSensorErrors = 0;
+}
+
 /**
  * Registra un manejador para eventos de error crítico
  */
@@ -214,9 +232,14 @@ export function getThermostatState(): ThermostatState {
     // Intentar obtener la temperatura actual
     try {
       const temperature = getTemperature();
+      resetSensorErrorCounter();
       thermostatState.currentTemperature = temperature;
     } catch (error) {
-      console.error("Error al leer la temperatura:", error);
+      if (error instanceof Error) {
+        handleSensorError(error);
+      } else {
+        handleSensorError(new Error(String(error)));
+      }
       // No actualizamos la temperatura en caso de error, mantenemos el último valor válido
     }
     
@@ -298,6 +321,7 @@ function updateCurrentState(): boolean {
   try {
     // Intentar leer la temperatura del sensor DS18B20
     const temperature = getTemperature();
+    resetSensorErrorCounter();
     
     thermostatState.currentTemperature = temperature;
     thermostatState.isHeating = getRelayState();
@@ -306,9 +330,11 @@ function updateCurrentState(): boolean {
     // No modificar thermostatState.hysteresis aquí
     return true;
   } catch (error) {
-    const errorMsg = `Error al actualizar estado: ${error instanceof Error ? error.message : String(error)}`;
-    console.error(errorMsg);
-    thermostatState.lastError = errorMsg;
+    if (error instanceof Error) {
+      handleSensorError(error);
+    } else {
+      handleSensorError(new Error(String(error)));
+    }
     return false;
   }
 }
