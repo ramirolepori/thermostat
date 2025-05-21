@@ -25,7 +25,7 @@ interface ThermostatState {
 const DEFAULT_CONFIG: ThermostatConfig = {
   targetTemperature: 22, // 22°C por defecto
   hysteresis: 1.5, // Diferencial de 1.5°C
-  checkIntervalMs: 1000, // Revisar cada 1 segundo (antes 5 segundos)
+  checkIntervalMs: 3000, // Revisar cada 3 segundos (mejora de performance)
   maxConsecutiveErrors: 5, // Máximo de errores consecutivos antes de apagar el sistema
 };
 
@@ -365,13 +365,13 @@ function toError(err: unknown): Error {
 /**
  * Valida el rango de temperatura
  */
-function validateTemperatureValue(temperature: number): boolean {
+export function validateTemperatureValue(temperature: number): boolean {
   return typeof temperature === 'number' && !isNaN(temperature) && temperature >= 5 && temperature <= 30;
 }
 
 /**
  * Valida el rango de histéresis
  */
-function validateHysteresisValue(hysteresis: number): boolean {
+export function validateHysteresisValue(hysteresis: number): boolean {
   return typeof hysteresis === 'number' && !isNaN(hysteresis) && hysteresis > 0 && hysteresis <= 5;
 }

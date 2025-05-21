@@ -9,7 +9,9 @@ import {
   setHysteresis, 
   getThermostatState,
   getLastError,
-  resetThermostat
+  resetThermostat,
+  validateTemperatureValue,
+  validateHysteresisValue
 } from '../services/logic';
 import { SceneModel } from '../database/scene.model';
 import { Types } from 'mongoose';
@@ -48,42 +50,27 @@ interface ThermostatConfigRequest extends Request {
   }
 }
 
-// Middleware para validación de parámetros de temperatura
+// Middleware para validación de parámetros de temperatura usando lógica centralizada
 const validateTemperature = (req: TemperatureRequest, res: Response, next: NextFunction) => {
   const temperature = req.body.temperature;
-  
   if (temperature === undefined || temperature === null) {
     return res.status(400).json({ error: 'No se proporcionó un valor de temperatura' });
   }
-  
-  if (typeof temperature !== 'number' || isNaN(temperature)) {
-    return res.status(400).json({ error: 'Se requiere un valor numérico válido para la temperatura' });
-  }
-  
-  // Validar rango de temperatura
-  if (temperature < 5 || temperature > 30) {
+  if (!validateTemperatureValue(temperature)) {
     return res.status(400).json({ error: 'La temperatura debe estar entre 5°C y 30°C' });
   }
-  
   next();
 };
 
-// Middleware para validación de histéresis
+// Middleware para validación de histéresis usando lógica centralizada
 const validateHysteresis = (req: HysteresisRequest, res: Response, next: NextFunction) => {
   const hysteresis = req.body.hysteresis;
-  
   if (hysteresis === undefined || hysteresis === null) {
     return res.status(400).json({ error: 'No se proporcionó un valor de histéresis' });
   }
-  
-  if (typeof hysteresis !== 'number' || isNaN(hysteresis)) {
-    return res.status(400).json({ error: 'Se requiere un valor numérico válido para la histéresis' });
-  }
-  
-  if (hysteresis <= 0 || hysteresis > 5) {
+  if (!validateHysteresisValue(hysteresis)) {
     return res.status(400).json({ error: 'La histéresis debe ser un valor positivo entre 0.1 y 5' });
   }
-  
   next();
 };
 
@@ -278,7 +265,7 @@ router.post('/thermostat/start', (req: ThermostatConfigRequest, res: Response) =
         return res.status(400).json({ error: 'La temperatura objetivo debe ser un valor numérico válido' });
       }
       
-      if (targetTemperature < 5 || targetTemperature > 30) {
+      if (!validateTemperatureValue(targetTemperature)) {
         return res.status(400).json({ error: 'La temperatura objetivo debe estar entre 5°C y 30°C' });
       }
       
@@ -291,7 +278,7 @@ router.post('/thermostat/start', (req: ThermostatConfigRequest, res: Response) =
         return res.status(400).json({ error: 'La histéresis debe ser un valor numérico válido' });
       }
       
-      if (hysteresis <= 0 || hysteresis > 5) {
+      if (!validateHysteresisValue(hysteresis)) {
         return res.status(400).json({ error: 'La histéresis debe ser un valor positivo entre 0.1 y 5' });
       }
       
