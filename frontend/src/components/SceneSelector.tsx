@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { Trash2 } from "lucide-react"
 import "../styles/Thermostat.css"
+import { validateSceneName, validateTemperatureValue } from "../api/validation";
+import { useApiRequest } from "../api/useApiRequest";
 
 interface Scene {
   _id: string; // MongoDB ID
@@ -27,6 +29,12 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
   const [newSceneName, setNewSceneName] = useState("")
   const [newSceneTemp, setNewSceneTemp] = useState(22)
   const [formError, setFormError] = useState<string | null>(null)
+
+  // Usar useApiRequest para crear escena
+  const [createSceneRequest, { loading: creatingScene, error: createSceneError }] = useApiRequest(async (name: string, temp: number) => {
+    // Simula llamada a backend o usa createScene si está disponible
+    return onAdd(name, temp);
+  });
 
   // Detect if we're on a mobile device - optimizado con useCallback
   useEffect(() => {
@@ -111,22 +119,32 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
     }
   }, [longPressTimer])
 
-  // Handler para agregar nueva escena con validación de nombre único
-  const handleAddScene = useCallback(() => {
-    if (!newSceneName.trim()) {
-      setFormError("El nombre de la escena no puede estar vacío");
+  // Handler para agregar nueva escena con validación centralizada y accesibilidad
+  const handleAddScene = useCallback(async () => {
+    const nameError = validateSceneName(newSceneName.trim());
+    const tempError = validateTemperatureValue(newSceneTemp);
+    if (nameError) {
+      setFormError(nameError);
+      return;
+    }
+    if (tempError) {
+      setFormError(tempError);
       return;
     }
     if (scenes.some(scene => scene.name.toLowerCase() === newSceneName.trim().toLowerCase())) {
       setFormError("Ya existe una escena con este nombre");
       return;
     }
-    onAdd(newSceneName.trim(), newSceneTemp);
-    setShowNewScene(false);
-    setNewSceneName("");
-    setNewSceneTemp(22);
-    setFormError(null);
-  }, [onAdd, newSceneName, newSceneTemp, scenes])
+    try {
+      await createSceneRequest(newSceneName.trim(), newSceneTemp);
+      setShowNewScene(false);
+      setNewSceneName("");
+      setNewSceneTemp(22);
+      setFormError(null);
+    } catch (e: any) {
+      setFormError(e?.message || "Error al crear la escena");
+    }
+  }, [onAdd, newSceneName, newSceneTemp, scenes, createSceneRequest]);
 
   // Memoizar la lista de escenas para evitar recálculo
   const scenesList = useMemo(() => (
@@ -189,6 +207,9 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
               onChange={e => { setNewSceneName(e.target.value); setFormError(null); }}
               disabled={disabled}
               maxLength={32}
+              aria-label="Nombre de la escena"
+              aria-invalid={!!formError}
+              aria-describedby={formError ? "scene-form-error" : undefined}
               style={{ marginRight: 8 }}
             />
             <div style={{ display: 'flex', alignItems: 'center', marginRight: 8 }}>
@@ -199,6 +220,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
                 value={newSceneTemp}
                 onChange={e => setNewSceneTemp(Number(e.target.value))}
                 disabled={disabled}
+                aria-label="Temperatura de la escena"
                 style={{ marginRight: 8 }}
               />
               <span>{newSceneTemp}°C</span>
@@ -206,9 +228,10 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
             <button
               className="scene-button"
               onClick={handleAddScene}
-              disabled={disabled || !newSceneName.trim()}
+              disabled={disabled || !newSceneName.trim() || creatingScene}
+              aria-busy={creatingScene}
             >
-              Guardar
+              {creatingScene ? "Guardando..." : "Guardar"}
             </button>
             <button
               className="scene-button"
@@ -218,7 +241,10 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
             >
               Cancelar
             </button>
-            {formError && <div className="scene-form-error">{formError}</div>}
+            {formError && <div id="scene-form-error" className="scene-form-error" role="alert">{formError}</div>}
+            {createSceneError && !formError && (
+              <div className="scene-form-error" role="alert">{createSceneError}</div>
+            )}
           </div>
         ) : (
           <button
@@ -231,7 +257,7 @@ const SceneSelector: React.FC<SceneSelectorProps> = React.memo(({ scenes, onActi
         )}
       </div>
     </div>
-  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate, showNewScene, newSceneName, newSceneTemp, handleAddScene, formError])
+  ), [scenes, isMobile, disabled, handleTouchStart, handleTouchEnd, handleTouchMove, handleDelete, contextMenu, onActivate, showNewScene, newSceneName, newSceneTemp, handleAddScene, formError, creatingScene, createSceneError])
 
   return scenesList;
 });
